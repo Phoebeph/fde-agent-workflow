@@ -1,0 +1,242 @@
+# WhatsApp Repair AI Backend
+
+本项目是维修 WhatsApp 群组 AI 工具的本地后端。影刀 RPA 负责操作 WhatsApp Web，本后端负责入库、附件归档、DeepSeek 分析、飞书多维表格同步和提醒任务管理。
+
+## Architecture
+
+```text
+影刀 RPA
+  -> WhatsApp Web 抓消息/下载附件/发提醒
+  -> 本地 FastAPI 后端
+  -> SQLite + 本地归档 + DeepSeek + 飞书多维表格
+```
+
+影刀只做网页自动化；复杂业务逻辑都在后端。
+
+## Setup
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+```
+
+编辑 `.env`，填入新的 DeepSeek key、飞书应用信息和 WhatsApp 群组名。不要把真实 key 写入代码、README 或提交记录。
+
+如果当前阶段 WhatsApp 和飞书都使用 mock data，可以设置：
+
+```env
+FEISHU_MOCK_MODE=true
+WHATSAPP_GROUP_NAME=Mock维修工作群
+```
+
+DeepSeek 仍然由 `DEEPSEEK_API_KEY` 控制；配置了 key 就调用真实 AI，没有 key 时使用规则兜底分析。
+
+初始化数据库：
+
+```bash
+python scripts/init_db.py
+```
+
+启动服务：
+
+```bash
+uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+## Yingdao Integration
+
+影刀流程调用这些接口：
+
+- `POST /api/whatsapp/messages`：提交抓到的 WhatsApp 消息。
+- `GET /api/whatsapp/download-jobs`：获取需要下载附件的消息。
+- `POST /api/whatsapp/attachments`：提交附件下载结果。
+- `GET /api/reminders/pending`：获取待发送提醒。
+- `POST /api/reminders/result`：提交提醒发送结果。
+
+详细字段见：
+
+- `docs/yingdao_flows.md`：影刀和后端接口总览。
+- `docs/yingdao_today_scan.md`：当天全量增量扫描、附件两步下载和验收步骤。
+- `docs/first_real_yingdao_test.md`：第一轮真实群小范围测试流程。
+
+影刀第一版建议每 5 分钟运行一次，每次扫描当天全部消息；后端按消息指纹去重，所以重复提交不会重复入库。扫描阶段只提交附件提示，下载阶段再按 `download-jobs` 回到 WhatsApp 下载图片/PDF。
+
+不用影刀时，可以先用示例 payload 验证 `/api/whatsapp/messages`：
+
+```bash
+.venv/bin/python scripts/send_yingdao_payload.py fixtures/yingdao_today_messages_example.json
+```
+
+## Feishu Integration
+
+使用飞书自建应用和多维表格：
+
+- `FEISHU_APP_ID`
+- `FEISHU_APP_SECRET`
+- `FEISHU_APP_TOKEN`
+- `FEISHU_TABLE_ID`
+
+后端会保存飞书 `record_id`，后续只更新同一条记录，避免重复创建。
+
+Mock 飞书模式会把记录写入 SQLite 的 `mock_feishu_records` 表，并生成 `mock_rec_...` record ID。查看 mock 记录：
+
+```bash
+curl http://127.0.0.1:8000/api/mock/feishu/records
+```
+
+## DeepSeek
+
+DeepSeek 使用 OpenAI-compatible chat completions 接口。默认模型是 `deepseek-v4-flash`，可通过 `DEEPSEEK_MODEL` 修改。
+
+如果没有配置 `DEEPSEEK_API_KEY`，系统仍可完成消息入库、附件归档和基础规则判断，但 AI 摘要和复杂匹配质量会下降。
+
+## Local Files
+
+默认目录：
+
+```text
+data/      SQLite 数据库
+archive/   归档后的照片和 PDF
+downloads/ 影刀下载临时目录
+```
+
+这些目录被 `.gitignore` 忽略。
+
+## Mock Pipeline
+
+当前 WhatsApp 和飞书都可用 mock data 跑通：
+
+```bash
+cd /Users/mac/Desktop/ai_projects/whatsapp
+.venv/bin/python scripts/run_mock_pipeline.py
+curl http://127.0.0.1:8000/api/status
+curl http://127.0.0.1:8000/api/mock/feishu/records
+```
+
+Mock 输入文件在 `fixtures/mock_whatsapp_messages.json`。后续接入影刀和飞书真实 API 时，保留同一套入库、分析和同步逻辑，只替换输入/输出通道。
+
+影刀提交 WhatsApp 消息到 `POST /api/whatsapp/messages` 后，后端会自动从管理人员的高置信派工消息中生成任务。默认派工管理人员：
+
+```text
+Dicky Company
+Rex Atl
+Ono atl
+```
+
+`Henry atl` 的消息默认作为追问和缺资料跟踪，不生成新任务。管理人员名单可通过 `.env` 调整：
+
+```env
+DISPATCH_MANAGER_SENDERS=Dicky Company,Rex Atl,Ono atl
+FOLLOWUP_MANAGER_SENDERS=Henry atl
+```
+
+人员职责和任务来源判断规则见 `docs/role_task_source_analysis.md`。原则是：只从高置信派工消息生成任务，Henry 的追问和普通同事的完成汇报优先作为任务追踪、验收和证据。
+
+也可以在本地管理页面手动维护人员角色和处理原则：
+
+```text
+http://127.0.0.1:8000/admin/settings
+```
+
+当前支持的角色：
+
+- `派工人员`：其明确派工消息可自动生成正式任务。
+- `跟进/验收`：其追问和缺资料消息优先作为任务追踪事件。
+- `维修执行`：主要提供工作结果、照片和维修报告 PDF。
+- `问题上报`：普通成员发现问题时先生成待确认线索，不直接变成正式任务。
+- `管理查看`：用于后续管理界面权限和筛选。
+
+如果管理页面里配置了派工/跟进人员，系统会优先使用数据库中的启用人员和别名；未配置时继续使用 `.env` 默认值。
+
+普通成员发现的问题会先进入待确认问题线索，不会直接变成正式任务。系统会继续扫描后续聊天记录；如果后续出现派工人员对同一地点/同一问题的明确安排，系统会自动把问题线索转成正式任务并关联到 `work_schedules`。
+
+管理人员也可以在设置页的“待确认问题”中做备用处理：
+
+```text
+待确认问题 -> 系统自动转任务 / 备用手动转任务 / 忽略 / 关闭
+```
+
+对应接口：
+
+```bash
+curl 'http://127.0.0.1:8000/api/issues?status=pending&limit=20'
+curl -X POST 'http://127.0.0.1:8000/api/issues/{issue_id}/convert' ...
+curl -X POST 'http://127.0.0.1:8000/api/issues/{issue_id}/ignore' ...
+curl -X POST 'http://127.0.0.1:8000/api/issues/{issue_id}/close' ...
+```
+
+Henry 的历史未回复、缺 PDF、缺照片、问跟进结果等消息会保存到 `task_events`，用于沉淀跟进规则和追踪证据。正式运行时，系统不依赖 Henry 继续发言，而是由自动跟进接口扫描每日任务和维修汇报后生成提醒。查看最近任务事件：
+
+```bash
+curl 'http://127.0.0.1:8000/api/task-events/recent?limit=20'
+```
+
+每日工作编程可先用结构化 mock 数据导入，模拟影刀 OCR 后的结果：
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/schedules/import \
+  -H 'Content-Type: application/json' \
+  --data-binary @fixtures/mock_daily_work_schedules.json
+```
+
+发送单条模拟 WhatsApp 消息并自动执行入库、分析、mock 飞书同步和提醒生成：
+
+```bash
+.venv/bin/python scripts/send_mock_message.py "Sam" "商场L 工程部要求检查 panic alarm，已测试正常，但维修报告 PDF 后补。"
+```
+
+脚本默认只输出一行摘要。完整运行摘要会保存到 SQLite 的 `run_records` 表：
+
+```bash
+curl 'http://127.0.0.1:8000/api/runs/recent?limit=10'
+```
+
+检查每日工作编程中仍未见 WhatsApp 完成回复的任务：
+
+```bash
+curl -X POST 'http://127.0.0.1:8000/api/schedules/check-unreplied?work_date=2026-06-10'
+```
+
+推荐给影刀或定时任务使用的统一自动跟进接口：
+
+```bash
+curl -X POST 'http://127.0.0.1:8000/api/followups/run?work_date=2026-06-10&limit=100'
+```
+
+该接口会同时检查：
+
+- 每日工作编程中有任务但 WhatsApp 未见完成回复的记录。
+- 已有维修汇报中仍缺照片、维修报告 PDF、路线图或明确工作结果的记录。
+- 已存在 `pending` 或 `sent` 提醒的维修记录不会重复创建提醒。
+
+维修记录会同时保存：
+
+- `completion_status`：业务状态，例如 `已完成`、`资料不足`、`需要跟进`、`未回复`。
+- `completion_score`：0-100 完成度分数，用于排序和区分严重程度。
+- `completion_level`：`高`、`较高`、`中`、`较低`、`低`。
+
+状态和分数的分工：
+
+- 工作完成但缺 PDF/照片：通常是 `资料不足`，分数按缺失程度扣减。
+- 工作未完成、需要报价、等主管/客户确认：优先是 `需要跟进`。
+- 当天计划任务没有 WhatsApp 完成回复：是 `未回复`，分数为 0。
+- 有明确结果、完整照片记录和维修报告 PDF：是 `已完成`，高分且不生成提醒。
+
+SQLite 只保存附件文件名、路径、hash 和类型，不保存图片/PDF 二进制内容。附件原文件保存在 `archive/`：
+
+```sql
+SELECT original_filename, archive_filename, archive_path, attachment_type
+FROM attachments
+ORDER BY id DESC
+LIMIT 10;
+```
+
+等价 HTTP 接口：
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/mock/whatsapp/message \
+  -H 'Content-Type: application/json' \
+  -d '{"sender":"Sam","text":"商场L 工程部要求检查 panic alarm，已测试正常，但维修报告 PDF 后补。"}'
+```

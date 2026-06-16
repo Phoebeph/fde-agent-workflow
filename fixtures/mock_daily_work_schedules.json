@@ -1,0 +1,54 @@
+{
+  "rows": [
+    {
+      "work_date": "2026-06-10",
+      "shift": "A.M.",
+      "staff_name": "Alice",
+      "site": "商场A",
+      "task_text": "例检，检查 CCTV workstation 和 panic alarm，完成后在 WhatsApp 回复工作结果。",
+      "source_file": "每天工作编程.pdf",
+      "ocr_confidence": 0.98,
+      "review_status": "confirmed"
+    },
+    {
+      "work_date": "2026-06-10",
+      "shift": "A.M.",
+      "staff_name": "Brian",
+      "site": "商场B",
+      "task_text": "门磁坏，更换门磁并测试；需要照片记录和维修报告 PDF。",
+      "source_file": "每天工作编程.pdf",
+      "ocr_confidence": 0.98,
+      "review_status": "confirmed"
+    },
+    {
+      "work_date": "2026-06-10",
+      "shift": "P.M.",
+      "staff_name": "Casey",
+      "site": "商场C",
+      "task_text": "读卡器无反应，检查火牛并维修；需要照片记录和维修报告 PDF。",
+      "source_file": "每天工作编程.pdf",
+      "ocr_confidence": 0.96,
+      "review_status": "confirmed"
+    },
+    {
+      "work_date": "2026-06-10",
+      "shift": "P.M.",
+      "staff_name": "Dicky",
+      "site": "商场D",
+      "task_text": "车闸底板故障，检查后如需报价放线，必须提供路线图或平面图。",
+      "source_file": "每天工作编程.pdf",
+      "ocr_confidence": 0.95,
+      "review_status": "confirmed"
+    },
+    {
+      "work_date": "2026-06-10",
+      "shift": "P.M.",
+      "staff_name": "Evan",
+      "site": "商场E",
+      "task_text": "送货流动 CCTV 车，完成后提供送货照片并回复工作结果。",
+      "source_file": "每天工作编程.pdf",
+      "ocr_confidence": 0.97,
+      "review_status": "confirmed"
+    }
+  ]
+}

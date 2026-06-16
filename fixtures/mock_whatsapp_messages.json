@@ -1,0 +1,70 @@
+{
+  "group_name": "Mock维修工作群",
+  "messages": [
+    {
+      "sender": "Kei",
+      "sent_at": "2026-06-10 09:18",
+      "text": "商场LY 例检完成，CCTV workstation 已清洁，panic alarm 测试正常。",
+      "external_message_id": "mock-wa-001",
+      "has_attachments": false,
+      "attachment_hints": [],
+      "raw_payload": {
+        "source": "mock"
+      }
+    },
+    {
+      "sender": "Lin",
+      "sent_at": "2026-06-10 11:42",
+      "text": "商场LY N座天台4号门门磁坏，已补半米线及更换门磁一对，测试正常。",
+      "external_message_id": "mock-wa-002",
+      "has_attachments": true,
+      "attachment_hints": [
+        {
+          "type": "image",
+          "label": "after_photo"
+        }
+      ],
+      "raw_payload": {
+        "source": "mock"
+      }
+    },
+    {
+      "sender": "Yan",
+      "sent_at": "2026-06-10 13:05",
+      "text": "商场HLC9 车场显示屏 FULL 问题，reboot server & workstation 后正常。",
+      "external_message_id": "mock-wa-003",
+      "has_attachments": false,
+      "attachment_hints": [],
+      "raw_payload": {
+        "source": "mock"
+      }
+    },
+    {
+      "sender": "Kit",
+      "sent_at": "2026-06-10 15:30",
+      "text": "商场M 二座会所八达通 reader 无反应，检查火牛坏，工程部自行更换后回复正常，report PDF 后补。",
+      "external_message_id": "mock-wa-004",
+      "has_attachments": false,
+      "attachment_hints": [],
+      "raw_payload": {
+        "source": "mock"
+      }
+    },
+    {
+      "sender": "Wah",
+      "sent_at": "2026-06-10 17:55",
+      "text": "商场C 流动 CCTV 车完成送货，已拍送货照片。",
+      "external_message_id": "mock-wa-005",
+      "has_attachments": true,
+      "attachment_hints": [
+        {
+          "type": "image",
+          "label": "delivery_photo"
+        }
+      ],
+      "raw_payload": {
+        "source": "mock"
+      }
+    }
+  ]
+}

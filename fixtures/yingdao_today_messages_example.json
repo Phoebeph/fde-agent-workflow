@@ -1,0 +1,63 @@
+{
+  "group_name": "维修工作群",
+  "messages": [
+    {
+      "sender": "Brian",
+      "sent_at": "2026-06-13 09:10",
+      "text": "商场52 控制室 CCTV mon 又闪，客户说需要处理。",
+      "external_message_id": "维修工作群|Brian|2026-06-13 09:10|商场52 控制室 CCTV mon 又闪，客户说需要处理。|0",
+      "has_attachments": false,
+      "attachment_hints": [],
+      "raw_payload": {
+        "source": "yingdao",
+        "flow_name": "whatsapp_collect_today_messages",
+        "scan_date": "2026-06-13",
+        "extract_method": "dom"
+      }
+    },
+    {
+      "sender": "Dicky Company",
+      "sent_at": "2026-06-13 09:18",
+      "text": "@⁨Lin atl⁩ 商场52 call, 过去看看 CCTV monitor 闪屏问题，完成后发现场照片和维修报告 PDF。",
+      "external_message_id": "维修工作群|Dicky Company|2026-06-13 09:18|@⁨Lin atl⁩ 商场52 call, 过去看看 CCTV monitor 闪屏问题，完成后发现场照片和维修报告 PDF。|0",
+      "has_attachments": false,
+      "attachment_hints": [],
+      "raw_payload": {
+        "source": "yingdao",
+        "flow_name": "whatsapp_collect_today_messages",
+        "scan_date": "2026-06-13",
+        "extract_method": "dom"
+      }
+    },
+    {
+      "sender": "Lin",
+      "sent_at": "2026-06-13 12:35",
+      "text": "商场52 已到场检查，CCTV monitor 电源线松动，重新固定后画面正常，已发照片，维修报告 PDF 稍后补。",
+      "external_message_id": "维修工作群|Lin|2026-06-13 12:35|商场52 已到场检查，CCTV monitor 电源线松动，重新固定后画面正常，已发照片，维修报告 PDF 稍后补。|1",
+      "has_attachments": true,
+      "attachment_hints": [
+        {"type": "image", "label": "现场照片"}
+      ],
+      "raw_payload": {
+        "source": "yingdao",
+        "flow_name": "whatsapp_collect_today_messages",
+        "scan_date": "2026-06-13",
+        "extract_method": "dom"
+      }
+    },
+    {
+      "sender": "Tom Company",
+      "sent_at": "2026-06-13 15:20",
+      "text": "@⁨Lin atl⁩ Lin, 13-Jun-2026, 商场52, 维修报告扫描请补回。",
+      "external_message_id": "维修工作群|Tom Company|2026-06-13 15:20|@⁨Lin atl⁩ Lin, 13-Jun-2026, 商场52, 维修报告扫描请补回。|0",
+      "has_attachments": false,
+      "attachment_hints": [],
+      "raw_payload": {
+        "source": "yingdao",
+        "flow_name": "whatsapp_collect_today_messages",
+        "scan_date": "2026-06-13",
+        "extract_method": "dom"
+      }
+    }
+  ]
+}
