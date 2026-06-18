@@ -37,6 +37,7 @@ from app.services.rules import load_rules_from_xlsx
 app = FastAPI(title="WhatsApp Repair AI Backend", version="0.1.0")
 db = Database(settings.database_path)
 DOWNLOADS_DIR = Path("downloads")
+AUTOMATION_NOTICE_MARKERS = ("自动化助手提示",)
 
 
 def deepseek_client() -> DeepSeekClient:
@@ -57,6 +58,10 @@ def feishu_client() -> FeishuClient:
         upload_parent_type=settings.feishu_upload_parent_type,
         upload_parent_node=settings.feishu_upload_parent_node,
     )
+
+
+def _is_automation_notice(text: str) -> bool:
+    return any(marker in text for marker in AUTOMATION_NOTICE_MARKERS)
 
 
 def _analyze_messages(messages: list[dict[str, object]], sync_feishu: bool) -> dict[str, object]:
@@ -570,7 +575,11 @@ def close_issue(issue_id: int, payload: IssueDecisionIn) -> dict[str, object]:
 def ingest_whatsapp_messages(payload: WhatsAppMessageBatchIn) -> dict[str, object]:
     rows = []
     fingerprints = []
+    filtered = 0
     for message in payload.messages:
+        if _is_automation_notice(message.text):
+            filtered += 1
+            continue
         fingerprint = message_fingerprint(
             group_name=payload.group_name,
             sender=message.sender,
@@ -594,6 +603,7 @@ def ingest_whatsapp_messages(payload: WhatsAppMessageBatchIn) -> dict[str, objec
             }
         )
     insert_result = db.insert_messages(rows)
+    insert_result["filtered"] = filtered
     stored_messages = db.list_messages_by_fingerprints(fingerprints)
     dispatch_result = _discover_and_save_dispatch_schedules(stored_messages)
     return {"messages": insert_result, "dispatch_schedules": dispatch_result}

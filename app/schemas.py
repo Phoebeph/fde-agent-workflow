@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import re
 from typing import Any, Literal
 
@@ -10,6 +10,7 @@ from app.config import settings
 
 
 DEFAULT_WHATSAPP_GROUP_NAME = "WhatsApp"
+WHATSAPP_TIMEZONE = timezone(timedelta(hours=8))
 
 
 _YINGDAO_TIMESTAMP_RE = re.compile(
@@ -40,7 +41,7 @@ def _normalize_yingdao_timestamp(value: str) -> str:
         )
     except ValueError:
         return value
-    return sent_at.strftime("%Y-%m-%d %H:%M")
+    return sent_at.replace(tzinfo=WHATSAPP_TIMEZONE).isoformat(timespec="seconds")
 
 
 class WhatsAppMessageIn(BaseModel):
