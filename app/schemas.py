@@ -1,8 +1,46 @@
 from __future__ import annotations
 
+from datetime import datetime
+import re
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+from app.config import settings
+
+
+DEFAULT_WHATSAPP_GROUP_NAME = "WhatsApp"
+
+
+_YINGDAO_TIMESTAMP_RE = re.compile(
+    r"^\s*(?P<day>\d{1,2})/(?P<month>\d{1,2})/(?P<year>\d{4})\s*"
+    r"(?P<period>上午|下午|AM|PM|am|pm)?\s*(?P<hour>\d{1,2}):(?P<minute>\d{2})\s*$"
+)
+
+
+def _normalize_yingdao_timestamp(value: str) -> str:
+    match = _YINGDAO_TIMESTAMP_RE.match(value)
+    if not match:
+        return value
+
+    hour = int(match.group("hour"))
+    period = match.group("period")
+    if period in {"下午", "PM", "pm"} and hour < 12:
+        hour += 12
+    elif period in {"上午", "AM", "am"} and hour == 12:
+        hour = 0
+
+    try:
+        sent_at = datetime(
+            int(match.group("year")),
+            int(match.group("month")),
+            int(match.group("day")),
+            hour,
+            int(match.group("minute")),
+        )
+    except ValueError:
+        return value
+    return sent_at.strftime("%Y-%m-%d %H:%M")
 
 
 class WhatsAppMessageIn(BaseModel):
@@ -13,6 +51,33 @@ class WhatsAppMessageIn(BaseModel):
     has_attachments: bool = False
     attachment_hints: list[dict[str, Any]] = Field(default_factory=list)
     raw_payload: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_yingdao_fields(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+
+        normalized = dict(data)
+        aliases = {
+            "sender": ("发送者", "發送者", "send_user", "sender_name"),
+            "text": ("消息内容", "訊息內容", "message", "content"),
+            "sent_at": ("时间", "時間", "send_time", "timestamp"),
+        }
+        for target, keys in aliases.items():
+            if normalized.get(target):
+                continue
+            for key in keys:
+                if normalized.get(key):
+                    normalized[target] = normalized[key]
+                    break
+
+        if not normalized.get("raw_payload") and any(key in data for keys in aliases.values() for key in keys):
+            normalized["raw_payload"] = data
+
+        if isinstance(normalized.get("sent_at"), str):
+            normalized["sent_at"] = _normalize_yingdao_timestamp(normalized["sent_at"])
+        return normalized
 
     @field_validator("sender", "sent_at")
     @classmethod
@@ -26,6 +91,30 @@ class WhatsAppMessageIn(BaseModel):
 class WhatsAppMessageBatchIn(BaseModel):
     group_name: str = Field(min_length=1)
     messages: list[WhatsAppMessageIn] = Field(min_length=1)
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_yingdao_batch(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+
+        normalized = dict(data)
+        if not normalized.get("messages"):
+            for key in ("消息列表", "訊息列表", "message_list"):
+                if normalized.get(key):
+                    normalized["messages"] = normalized[key]
+                    break
+
+        if not normalized.get("group_name"):
+            for key in ("群名称", "群名", "群組名稱", "groupName"):
+                if normalized.get(key):
+                    normalized["group_name"] = normalized[key]
+                    break
+        if not normalized.get("group_name") and settings.whatsapp_group_name:
+            normalized["group_name"] = settings.whatsapp_group_name
+        if not normalized.get("group_name"):
+            normalized["group_name"] = DEFAULT_WHATSAPP_GROUP_NAME
+        return normalized
 
     @field_validator("group_name")
     @classmethod
