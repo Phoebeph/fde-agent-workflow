@@ -223,6 +223,39 @@ class DatabaseTests(unittest.TestCase):
             self.assertEqual(db.delete_repair_records_for_message(stored["id"]), 1)
             self.assertEqual(db.list_mock_feishu_records(limit=10), [])
 
+    def test_init_repairs_reminders_foreign_key_to_old_repair_table(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db = Database(Path(temp_dir) / "test.db")
+            db.init()
+            with db.connect() as conn:
+                conn.execute("ALTER TABLE reminders RENAME TO reminders_broken")
+                conn.execute(
+                    """
+                    CREATE TABLE reminders (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        repair_record_id INTEGER NOT NULL,
+                        target_name TEXT NOT NULL,
+                        reason TEXT NOT NULL,
+                        content TEXT NOT NULL,
+                        status TEXT NOT NULL DEFAULT 'pending',
+                        sent_at TEXT,
+                        result_payload_json TEXT NOT NULL DEFAULT '{}',
+                        resolved_at TEXT,
+                        created_at TEXT NOT NULL,
+                        FOREIGN KEY(repair_record_id) REFERENCES repair_records_old(id) ON DELETE CASCADE
+                    )
+                    """
+                )
+                conn.execute("DROP TABLE reminders_broken")
+
+            db.init()
+
+            with db.connect() as conn:
+                foreign_tables = {
+                    row["table"] for row in conn.execute("PRAGMA foreign_key_list(reminders)").fetchall()
+                }
+            self.assertEqual(foreign_tables, {"repair_records"})
+
     def test_staff_role_config_is_saved_and_used_for_role_lookup(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             db = Database(Path(temp_dir) / "test.db")

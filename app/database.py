@@ -313,6 +313,11 @@ class Database:
             WHERE raw_message_id IS NOT NULL
             """
         )
+        reminder_foreign_tables = {
+            row["table"] for row in conn.execute("PRAGMA foreign_key_list(reminders)").fetchall()
+        }
+        if "repair_records_old" in reminder_foreign_tables:
+            self._rebuild_reminders_after_repair_records_migration(conn)
         conn.execute(
             """
             UPDATE repair_records
@@ -393,6 +398,60 @@ class Database:
         conn.execute("DROP TABLE repair_records_old")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_repair_records_status ON repair_records(completion_status)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_repair_records_date_staff ON repair_records(work_date, staff_name)")
+        self._rebuild_reminders_after_repair_records_migration(conn)
+
+    def _rebuild_reminders_after_repair_records_migration(self, conn: sqlite3.Connection) -> None:
+        reminder_columns = {
+            row["name"] for row in conn.execute("PRAGMA table_info(reminders)").fetchall()
+        }
+        required_columns = {
+            "id",
+            "repair_record_id",
+            "target_name",
+            "reason",
+            "content",
+            "status",
+            "sent_at",
+            "result_payload_json",
+            "resolved_at",
+            "created_at",
+        }
+        if not required_columns.issubset(reminder_columns):
+            return
+        conn.execute("ALTER TABLE reminders RENAME TO reminders_old")
+        conn.execute(
+            """
+            CREATE TABLE reminders (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                repair_record_id INTEGER NOT NULL,
+                target_name TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                content TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                sent_at TEXT,
+                result_payload_json TEXT NOT NULL DEFAULT '{}',
+                resolved_at TEXT,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(repair_record_id) REFERENCES repair_records(id) ON DELETE CASCADE
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO reminders (
+                id, repair_record_id, target_name, reason, content, status,
+                sent_at, result_payload_json, resolved_at, created_at
+            )
+            SELECT
+                id, repair_record_id, target_name, reason, content, status,
+                sent_at, result_payload_json, resolved_at, created_at
+            FROM reminders_old
+            WHERE repair_record_id IN (SELECT id FROM repair_records)
+            """
+        )
+        conn.execute("DROP TABLE reminders_old")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_reminders_status ON reminders(status)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_reminders_record ON reminders(repair_record_id)")
 
     def _seed_default_principles(self, conn: sqlite3.Connection) -> None:
         now = utc_now()
