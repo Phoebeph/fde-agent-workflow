@@ -29,8 +29,18 @@ class DeepSeekClient:
         attachments: list[dict[str, Any]],
         rules: list[dict[str, Any]],
     ) -> dict[str, Any]:
+        items = self.analyze_message_items(message=message, attachments=attachments, rules=rules)
+        return items[0] if items else rule_based_analysis(message, attachments, rules)
+
+    def analyze_message_items(
+        self,
+        *,
+        message: dict[str, Any],
+        attachments: list[dict[str, Any]],
+        rules: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
         if not self.enabled:
-            return rule_based_analysis(message, attachments, rules)
+            return rule_based_analysis_items(message, attachments, rules)
 
         payload = {
             "model": self.model,
@@ -40,7 +50,10 @@ class DeepSeekClient:
                     "content": (
                         "You convert Hong Kong maintenance WhatsApp messages into strict JSON. "
                         "Return only one JSON object. Do not include markdown. "
-                        "Use Simplified Chinese labels where status text is needed."
+                        "Use Simplified Chinese labels where status text is needed. "
+                        "If one WhatsApp message contains multiple independent maintenance jobs, "
+                        "return one item per job in the items array. Ignore standalone photo labels "
+                        "or material labels such as 前/中/后/料 unless they include real work details."
                     ),
                 },
                 {
@@ -57,6 +70,22 @@ class DeepSeekClient:
                             ],
                             "rules": rules[:30],
                             "required_json_schema": {
+                                "items": [
+                                    {
+                                        "work_date": "YYYY-MM-DD or empty string",
+                                        "staff_name": "actual staff name if mentioned, otherwise sender",
+                                        "site": "site/location if known",
+                                        "work_type": "例检/ad-hoc/maintenance/delivery/quotation/other",
+                                        "summary": "short maintenance summary for this one job",
+                                        "result": "work result for this one job",
+                                        "completion_status": "已完成|资料不足|需要跟进|待人工确认|未回复",
+                                        "completion_score": "0-100 integer, higher means more complete",
+                                        "completion_level": "高|较高|中|较低|低",
+                                        "missing_items": ["missing photo/pdf/report/detail if any"],
+                                        "next_actions": ["follow-up action if any"],
+                                        "reminder_text": "WhatsApp reminder text if missing_items or follow-up is needed",
+                                    }
+                                ],
                                 "work_date": "YYYY-MM-DD or empty string",
                                 "staff_name": "sender/staff name",
                                 "site": "site/location if known",
@@ -85,7 +114,7 @@ class DeepSeekClient:
             result = json.loads(content)
         except (KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
             raise DeepSeekError("DeepSeek returned an invalid analysis payload") from exc
-        return normalize_analysis(result, message, attachments, rules)
+        return normalize_analysis_items(result, message, attachments, rules)
 
     def _post_json(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
         url = f"{self.base_url}{path}"
@@ -164,6 +193,107 @@ def rule_based_analysis(
         attachments,
         rules,
     )
+
+
+def rule_based_analysis_items(
+    message: dict[str, Any],
+    attachments: list[dict[str, Any]],
+    rules: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    text = (message.get("text") or "").strip()
+    chunks = split_work_item_text(text)
+    if len(chunks) <= 1:
+        return [rule_based_analysis(message, attachments, rules)]
+    items = []
+    for chunk in chunks:
+        item_message = dict(message)
+        item_message["text"] = chunk
+        items.append(rule_based_analysis(item_message, attachments, rules))
+    return items
+
+
+def normalize_analysis_items(
+    analysis: dict[str, Any],
+    message: dict[str, Any],
+    attachments: list[dict[str, Any]],
+    rules: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    raw_items = analysis.get("items")
+    if isinstance(raw_items, list):
+        normalized_items = [
+            normalize_analysis(item, message, attachments, rules)
+            for item in raw_items
+            if isinstance(item, dict) and _has_meaningful_item_content(item)
+        ]
+        if normalized_items:
+            return normalized_items
+    chunks = split_work_item_text(str(message.get("text") or ""))
+    if len(chunks) > 1:
+        items = []
+        for chunk in chunks:
+            item_message = dict(message)
+            item_message["text"] = chunk
+            items.append(rule_based_analysis(item_message, attachments, rules))
+        return items
+    return [normalize_analysis(analysis, message, attachments, rules)]
+
+
+def split_work_item_text(text: str) -> list[str]:
+    lines = [line.strip(" \t-•⁠") for line in text.splitlines()]
+    items: list[str] = []
+    current_heading = ""
+    for line in lines:
+        if not line:
+            continue
+        if _looks_like_site_heading(line) and not _looks_like_work_line(line):
+            current_heading = line
+            continue
+        if _looks_like_work_line(line):
+            items.append(f"{current_heading} {line}".strip())
+    return items or [text.strip()]
+
+
+def _looks_like_site_heading(line: str) -> bool:
+    if len(line) > 40:
+        return False
+    return bool(any(char.isalpha() for char in line) or any("\u4e00" <= char <= "\u9fff" for char in line))
+
+
+def _looks_like_work_line(line: str) -> bool:
+    lowered = line.lower()
+    markers = [
+        "cam",
+        "camera",
+        "disconnect",
+        "speaker",
+        "pos",
+        "lift",
+        "qr",
+        "更換",
+        "更换",
+        "失靈",
+        "失灵",
+        "正常",
+        "未能跟進",
+        "未能跟进",
+        "需再",
+        "需報價",
+        "需报价",
+        "測試",
+        "测试",
+        "例檢",
+        "例检",
+        "checklist",
+    ]
+    return any(marker in lowered or marker in line for marker in markers)
+
+
+def _has_meaningful_item_content(item: dict[str, Any]) -> bool:
+    text = " ".join(
+        str(item.get(key) or "")
+        for key in ("site", "work_type", "summary", "result")
+    ).strip()
+    return len(text) >= 4
 
 
 def normalize_analysis(

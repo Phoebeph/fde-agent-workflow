@@ -104,6 +104,7 @@ CREATE INDEX IF NOT EXISTS idx_work_schedules_date_staff ON work_schedules(work_
 CREATE TABLE IF NOT EXISTS repair_records (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     raw_message_id INTEGER,
+    item_index INTEGER NOT NULL DEFAULT 0,
     work_schedule_id INTEGER,
     work_date TEXT,
     staff_name TEXT,
@@ -122,7 +123,7 @@ CREATE TABLE IF NOT EXISTS repair_records (
     updated_at TEXT NOT NULL,
     FOREIGN KEY(raw_message_id) REFERENCES raw_messages(id) ON DELETE SET NULL,
     FOREIGN KEY(work_schedule_id) REFERENCES work_schedules(id) ON DELETE SET NULL,
-    UNIQUE(raw_message_id)
+    UNIQUE(raw_message_id, item_index)
 );
 
 CREATE INDEX IF NOT EXISTS idx_repair_records_status ON repair_records(completion_status);
@@ -290,6 +291,28 @@ class Database:
             conn.execute("ALTER TABLE repair_records ADD COLUMN completion_score INTEGER NOT NULL DEFAULT 0")
         if "completion_level" not in repair_columns:
             conn.execute("ALTER TABLE repair_records ADD COLUMN completion_level TEXT NOT NULL DEFAULT ''")
+        if "item_index" not in repair_columns:
+            conn.execute("ALTER TABLE repair_records ADD COLUMN item_index INTEGER NOT NULL DEFAULT 0")
+        indexes = conn.execute("PRAGMA index_list(repair_records)").fetchall()
+        unique_columns = {
+            tuple(
+                info["name"]
+                for info in conn.execute(f"PRAGMA index_info({row['name']})").fetchall()
+            )
+            for row in indexes
+            if row["unique"]
+        }
+        has_old_unique = ("raw_message_id",) in unique_columns
+        has_item_unique = any(row["name"] == "idx_repair_records_raw_item_unique" for row in indexes)
+        if has_old_unique and not has_item_unique:
+            self._rebuild_repair_records_for_multiple_items(conn)
+        conn.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_repair_records_raw_item_unique
+            ON repair_records(raw_message_id, item_index)
+            WHERE raw_message_id IS NOT NULL
+            """
+        )
         conn.execute(
             """
             UPDATE repair_records
@@ -316,6 +339,60 @@ class Database:
             WHERE completion_score = 0 AND completion_level = ''
             """
         )
+
+    def _rebuild_repair_records_for_multiple_items(self, conn: sqlite3.Connection) -> None:
+        conn.execute("ALTER TABLE repair_records RENAME TO repair_records_old")
+        conn.execute(
+            """
+            CREATE TABLE repair_records (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                raw_message_id INTEGER,
+                item_index INTEGER NOT NULL DEFAULT 0,
+                work_schedule_id INTEGER,
+                work_date TEXT,
+                staff_name TEXT,
+                site TEXT,
+                work_type TEXT,
+                summary TEXT NOT NULL DEFAULT '',
+                result TEXT NOT NULL DEFAULT '',
+                completion_status TEXT NOT NULL DEFAULT '待人工确认',
+                completion_score INTEGER NOT NULL DEFAULT 0,
+                completion_level TEXT NOT NULL DEFAULT '',
+                missing_items_json TEXT NOT NULL DEFAULT '[]',
+                next_actions_json TEXT NOT NULL DEFAULT '[]',
+                feishu_record_id TEXT,
+                human_review_status TEXT NOT NULL DEFAULT 'pending',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY(raw_message_id) REFERENCES raw_messages(id) ON DELETE SET NULL,
+                FOREIGN KEY(work_schedule_id) REFERENCES work_schedules(id) ON DELETE SET NULL,
+                UNIQUE(raw_message_id, item_index)
+            )
+            """
+        )
+        old_columns = {
+            row["name"] for row in conn.execute("PRAGMA table_info(repair_records_old)").fetchall()
+        }
+        item_expr = "item_index" if "item_index" in old_columns else "0"
+        conn.execute(
+            f"""
+            INSERT INTO repair_records (
+                id, raw_message_id, item_index, work_schedule_id, work_date, staff_name, site,
+                work_type, summary, result, completion_status, completion_score,
+                completion_level, missing_items_json, next_actions_json, feishu_record_id,
+                human_review_status, created_at, updated_at
+            )
+            SELECT
+                id, raw_message_id, {item_expr}, work_schedule_id, work_date, staff_name, site,
+                work_type, summary, result, completion_status, completion_score,
+                completion_level, missing_items_json, next_actions_json, feishu_record_id,
+                human_review_status, created_at, updated_at
+            FROM repair_records_old
+            """
+        )
+        conn.execute("DROP TABLE repair_records_old")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_repair_records_status ON repair_records(completion_status)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_repair_records_date_staff ON repair_records(work_date, staff_name)")
 
     def _seed_default_principles(self, conn: sqlite3.Connection) -> None:
         now = utc_now()
@@ -1215,6 +1292,7 @@ class Database:
         raw_message_id: int,
         analysis: dict[str, Any],
         feishu_record_id: str | None = None,
+        item_index: int = 0,
     ) -> int:
         now = utc_now()
         missing_items = analysis.get("missing_items", []) or []
@@ -1223,14 +1301,14 @@ class Database:
             conn.execute(
                 """
                 INSERT INTO repair_records (
-                    raw_message_id, work_schedule_id, work_date, staff_name, site,
+                    raw_message_id, item_index, work_schedule_id, work_date, staff_name, site,
                     work_type, summary, result, completion_status,
                     completion_score, completion_level,
                     missing_items_json, next_actions_json, feishu_record_id,
                     created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(raw_message_id) DO UPDATE SET
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(raw_message_id, item_index) DO UPDATE SET
                     work_schedule_id = excluded.work_schedule_id,
                     work_date = excluded.work_date,
                     staff_name = excluded.staff_name,
@@ -1248,6 +1326,7 @@ class Database:
                 """,
                 (
                     raw_message_id,
+                    item_index,
                     analysis.get("work_schedule_id"),
                     analysis.get("work_date"),
                     analysis.get("staff_name"),
@@ -1266,8 +1345,8 @@ class Database:
                 ),
             )
             row = conn.execute(
-                "SELECT id FROM repair_records WHERE raw_message_id = ?",
-                (raw_message_id,),
+                "SELECT id FROM repair_records WHERE raw_message_id = ? AND item_index = ?",
+                (raw_message_id, item_index),
             ).fetchone()
             if feishu_record_id:
                 conn.execute(
@@ -1284,6 +1363,28 @@ class Database:
                     (raw_message_id,),
                 )
         return int(row["id"])
+
+    def delete_repair_records_for_message(self, raw_message_id: int) -> int:
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT feishu_record_id FROM repair_records
+                WHERE raw_message_id = ? AND feishu_record_id IS NOT NULL
+                """,
+                (raw_message_id,),
+            ).fetchall()
+            record_ids = [row["feishu_record_id"] for row in rows if row["feishu_record_id"]]
+            deleted = conn.execute(
+                "DELETE FROM repair_records WHERE raw_message_id = ?",
+                (raw_message_id,),
+            ).rowcount
+            for record_id in record_ids:
+                conn.execute("DELETE FROM mock_feishu_records WHERE record_id = ?", (record_id,))
+            conn.execute(
+                "UPDATE raw_messages SET feishu_record_id = NULL WHERE id = ?",
+                (raw_message_id,),
+            )
+        return int(deleted or 0)
 
     def save_schedule_gap_record(
         self,

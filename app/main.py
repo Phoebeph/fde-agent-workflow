@@ -12,6 +12,7 @@ from app.config import settings
 from app.database import Database
 from app.schemas import (
     AnalyzeRunIn,
+    AnalyzeResetIn,
     AttachmentIn,
     IssueConvertIn,
     IssueDecisionIn,
@@ -38,6 +39,27 @@ app = FastAPI(title="WhatsApp Repair AI Backend", version="0.1.0")
 db = Database(settings.database_path)
 DOWNLOADS_DIR = Path("downloads")
 AUTOMATION_NOTICE_MARKERS = ("自动化助手提示",)
+ATTACHMENT_LABEL_TEXTS = {
+    "前",
+    "中",
+    "后",
+    "後",
+    "料",
+    "物料",
+    "電鎖前",
+    "电锁前",
+    "電鎖中",
+    "电锁中",
+    "電鎖後",
+    "电锁后",
+    "電鎖后",
+    "換前",
+    "换前",
+    "換中",
+    "换中",
+    "換後",
+    "换后",
+}
 
 
 def deepseek_client() -> DeepSeekClient:
@@ -64,6 +86,17 @@ def _is_automation_notice(text: str) -> bool:
     return any(marker in text for marker in AUTOMATION_NOTICE_MARKERS)
 
 
+def _is_standalone_attachment_label(text: str) -> bool:
+    normalized = "".join((text or "").split()).strip("：:,.，。()（）[]【】")
+    if not normalized:
+        return True
+    if normalized in ATTACHMENT_LABEL_TEXTS:
+        return True
+    if len(normalized) <= 2 and normalized in {"前", "中", "后", "後", "料"}:
+        return True
+    return False
+
+
 def _analyze_messages(messages: list[dict[str, object]], sync_feishu: bool) -> dict[str, object]:
     rules = db.list_rules()
     deepseek = deepseek_client()
@@ -74,51 +107,79 @@ def _analyze_messages(messages: list[dict[str, object]], sync_feishu: bool) -> d
     feishu_synced = 0
     first_error = None
     records: list[dict[str, object]] = []
+    skipped = 0
 
     for message in messages:
         attachments = db.list_attachments_for_message(message["id"])
         try:
-            analysis = deepseek.analyze_message(
+            db.delete_repair_records_for_message(message["id"])
+            if _is_standalone_attachment_label(str(message.get("text") or "")):
+                db.mark_message_done(message["id"])
+                skipped += 1
+                records.append(
+                    {
+                        "message_fingerprint": message["message_fingerprint"],
+                        "skipped": True,
+                        "skip_reason": "standalone_attachment_label",
+                    }
+                )
+                continue
+            analyses = deepseek.analyze_message_items(
                 message=message,
                 attachments=attachments,
                 rules=rules,
             )
             schedules = db.list_schedules_for_message(message)
-            analysis = apply_schedule_completion(
-                analysis=analysis,
-                message=message,
-                attachments=attachments,
-                schedules=schedules,
-            )
-            feishu_record_id = None
-            if sync_feishu and settings.feishu_sync_available:
-                fields = feishu.fields_for_repair_record(message, analysis, attachments)
-                if feishu.enabled and message.get("feishu_record_id"):
-                    feishu.update_record(message["feishu_record_id"], fields)
-                    feishu_record_id = message["feishu_record_id"]
-                elif feishu.enabled:
-                    feishu_record_id = feishu.create_record(fields)
-                else:
-                    feishu_record_id = db.save_mock_feishu_record(
-                        fields,
-                        message.get("feishu_record_id"),
-                    )
-                feishu_synced += 1
-            record_id = db.save_repair_record(message["id"], analysis, feishu_record_id)
-            reminder_created = db.create_reminder_if_needed(record_id, analysis)
-            if reminder_created:
-                reminders_created += 1
-            records.append(
-                {
-                    "message_fingerprint": message["message_fingerprint"],
-                    "feishu_record_id": feishu_record_id,
-                    "completion_status": analysis.get("completion_status", ""),
-                    "completion_score": analysis.get("completion_score", 0),
-                    "completion_level": analysis.get("completion_level", ""),
-                    "reminders_created": 1 if reminder_created else 0,
-                }
-            )
-            analyzed += 1
+            first_feishu_record_id = None
+            for item_index, raw_analysis in enumerate(analyses):
+                analysis = apply_schedule_completion(
+                    analysis=raw_analysis,
+                    message=message,
+                    attachments=attachments,
+                    schedules=schedules,
+                )
+                feishu_record_id = None
+                if sync_feishu and settings.feishu_sync_available:
+                    fields = feishu.fields_for_repair_record(message, analysis, attachments)
+                    if len(analyses) > 1:
+                        fields["WhatsApp原文"] = analysis.get("summary") or message.get("text", "")
+                    if feishu.enabled:
+                        feishu_record_id = feishu.create_record(fields)
+                    else:
+                        record_id_for_update = (
+                            message.get("feishu_record_id")
+                            if item_index == 0 and len(analyses) == 1
+                            else None
+                        )
+                        feishu_record_id = db.save_mock_feishu_record(fields, record_id_for_update)
+                    if first_feishu_record_id is None:
+                        first_feishu_record_id = feishu_record_id
+                    feishu_synced += 1
+                record_id = db.save_repair_record(
+                    message["id"],
+                    analysis,
+                    feishu_record_id,
+                    item_index=item_index,
+                )
+                reminder_created = db.create_reminder_if_needed(record_id, analysis)
+                if reminder_created:
+                    reminders_created += 1
+                records.append(
+                    {
+                        "message_fingerprint": message["message_fingerprint"],
+                        "item_index": item_index,
+                        "feishu_record_id": feishu_record_id,
+                        "completion_status": analysis.get("completion_status", ""),
+                        "completion_score": analysis.get("completion_score", 0),
+                        "completion_level": analysis.get("completion_level", ""),
+                        "reminders_created": 1 if reminder_created else 0,
+                    }
+                )
+                analyzed += 1
+            if not analyses:
+                db.mark_message_done(message["id"])
+            elif not first_feishu_record_id:
+                db.mark_message_done(message["id"])
         except (DeepSeekError, FeishuError, ValueError) as exc:
             db.mark_message_retry(message["id"])
             failed += 1
@@ -129,6 +190,7 @@ def _analyze_messages(messages: list[dict[str, object]], sync_feishu: bool) -> d
         "processed": len(messages),
         "analyzed": analyzed,
         "failed": failed,
+        "skipped": skipped,
         "reminders_created": reminders_created,
         "feishu_synced": feishu_synced,
         "records": records,
@@ -843,6 +905,15 @@ def run_followups(
 @app.post("/api/analyze/run")
 def run_analysis(payload: AnalyzeRunIn) -> dict[str, object]:
     return _analyze_pending_messages(payload.limit, payload.sync_feishu)
+
+
+@app.post("/api/analyze/reset")
+def reset_analysis(payload: AnalyzeResetIn) -> dict[str, object]:
+    reset = 0
+    for message_id in payload.message_ids:
+        db.mark_message_retry(message_id)
+        reset += 1
+    return {"reset": reset, "message_ids": payload.message_ids}
 
 
 @app.get("/api/reminders/pending")

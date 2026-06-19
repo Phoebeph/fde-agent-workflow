@@ -178,6 +178,10 @@ class AnalyzeRunIn(BaseModel):
     sync_feishu: bool = True
 
 
+class AnalyzeResetIn(BaseModel):
+    message_ids: list[int] = Field(min_length=1)
+
+
 class ReminderResultIn(BaseModel):
     reminder_id: int = Field(ge=1)
     status: Literal["sent", "failed", "skipped"]

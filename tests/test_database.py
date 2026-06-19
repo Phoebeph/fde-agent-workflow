@@ -145,6 +145,84 @@ class DatabaseTests(unittest.TestCase):
             self.assertEqual(records[0]["missing_items"], ["维修报告 PDF"])
             self.assertEqual(records[0]["next_actions"], ["提醒补充维修报告 PDF"])
 
+    def test_save_repair_record_allows_multiple_items_per_message(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db = Database(Path(temp_dir) / "test.db")
+            db.init()
+            message = {
+                "group_name": "维修群",
+                "sender": "Casey",
+                "sent_at": "2026-06-10 13:00",
+                "text": "TV wall 正常\nLG08 更换火牛后正常",
+                "message_fingerprint": "f" * 64,
+                "has_attachments": False,
+                "attachment_hints": [],
+                "raw_payload": {},
+            }
+            db.insert_messages([message])
+            stored = db.get_message_by_fingerprint("f" * 64)
+
+            first = db.save_repair_record(
+                stored["id"],
+                {
+                    "work_date": "2026-06-10",
+                    "staff_name": "Casey",
+                    "site": "The SOUI",
+                    "work_type": "maintenance",
+                    "summary": "TV wall 重新 config 后正常",
+                    "completion_status": "已完成",
+                },
+                "mock_rec_first",
+                item_index=0,
+            )
+            second = db.save_repair_record(
+                stored["id"],
+                {
+                    "work_date": "2026-06-10",
+                    "staff_name": "Casey",
+                    "site": "The SOUI LG08",
+                    "work_type": "maintenance",
+                    "summary": "电子门更换火牛后正常",
+                    "completion_status": "已完成",
+                },
+                "mock_rec_second",
+                item_index=1,
+            )
+
+            self.assertNotEqual(first, second)
+            self.assertEqual(len(db.list_repair_records_needing_followup(limit=10)), 0)
+
+    def test_delete_repair_records_for_message_removes_mock_records(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db = Database(Path(temp_dir) / "test.db")
+            db.init()
+            message = {
+                "group_name": "维修群",
+                "sender": "Casey",
+                "sent_at": "2026-06-10 13:00",
+                "text": "料",
+                "message_fingerprint": "0" * 64,
+                "has_attachments": False,
+                "attachment_hints": [],
+                "raw_payload": {},
+            }
+            db.insert_messages([message])
+            stored = db.get_message_by_fingerprint("0" * 64)
+            mock_id = db.save_mock_feishu_record({"AI摘要": "脏记录"})
+            db.save_repair_record(
+                stored["id"],
+                {
+                    "work_date": "2026-06-10",
+                    "staff_name": "Casey",
+                    "summary": "料",
+                    "completion_status": "资料不足",
+                },
+                mock_id,
+            )
+
+            self.assertEqual(db.delete_repair_records_for_message(stored["id"]), 1)
+            self.assertEqual(db.list_mock_feishu_records(limit=10), [])
+
     def test_staff_role_config_is_saved_and_used_for_role_lookup(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             db = Database(Path(temp_dir) / "test.db")

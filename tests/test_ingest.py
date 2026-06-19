@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from app.main import ingest_whatsapp_messages
+from app.main import _is_standalone_attachment_label, ingest_whatsapp_messages
 from app.schemas import WhatsAppMessageBatchIn
 
 
@@ -20,6 +20,12 @@ class FakeDatabase:
 
 
 class IngestTests(unittest.TestCase):
+    def test_standalone_attachment_labels_are_detected(self) -> None:
+        self.assertTrue(_is_standalone_attachment_label("料"))
+        self.assertTrue(_is_standalone_attachment_label("電鎖前"))
+        self.assertTrue(_is_standalone_attachment_label(" 後 "))
+        self.assertFalse(_is_standalone_attachment_label("LG09 電鎖後更換正常"))
+
     def test_ingest_filters_automation_notice_messages(self) -> None:
         fake_db = FakeDatabase()
         payload = WhatsAppMessageBatchIn.model_validate(
