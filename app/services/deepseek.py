@@ -246,6 +246,9 @@ def split_work_item_text(text: str) -> list[str]:
     for line in lines:
         if not line:
             continue
+        if _is_followup_detail_line(line) and items:
+            items[-1] = f"{items[-1]}，{line}"
+            continue
         if _looks_like_site_heading(line) and not _looks_like_work_line(line):
             current_heading = line
             continue
@@ -297,6 +300,24 @@ def _looks_like_work_line(line: str) -> bool:
         "checklist",
     ]
     return any(marker in lowered or marker in line for marker in markers)
+
+
+def _is_followup_detail_line(line: str) -> bool:
+    normalized = "".join(line.split()).casefold()
+    if not normalized:
+        return False
+    detail_markers = [
+        "checklist已簽",
+        "checklist已签",
+        "checklist已交",
+        "因天雨關係需再跟進",
+        "因天雨关系需再跟进",
+        "因天氣關係需再跟進",
+        "因天气关系需再跟进",
+        "需再跟進",
+        "需再跟进",
+    ]
+    return any(marker in normalized for marker in detail_markers)
 
 
 def _append_missing_split_items(

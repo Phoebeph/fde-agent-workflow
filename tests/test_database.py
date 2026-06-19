@@ -191,6 +191,9 @@ class DatabaseTests(unittest.TestCase):
 
             self.assertNotEqual(first, second)
             self.assertEqual(len(db.list_repair_records_needing_followup(limit=10)), 0)
+            records = db.list_repair_records_for_message(stored["id"])
+            self.assertEqual([record["item_index"] for record in records], [0, 1])
+            self.assertEqual(records[1]["site"], "The SOUI LG08")
 
     def test_delete_repair_records_for_message_removes_mock_records(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

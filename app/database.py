@@ -1464,6 +1464,24 @@ class Database:
             )
         return int(deleted or 0)
 
+    def list_repair_records_for_message(self, raw_message_id: int) -> list[dict[str, Any]]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM repair_records
+                WHERE raw_message_id = ?
+                ORDER BY item_index ASC, id ASC
+                """,
+                (raw_message_id,),
+            ).fetchall()
+        records = []
+        for row in rows:
+            record = dict(row)
+            record["missing_items"] = loads(record.pop("missing_items_json", "[]"), [])
+            record["next_actions"] = loads(record.pop("next_actions_json", "[]"), [])
+            records.append(record)
+        return records
+
     def cleanup_mock_records_by_whatsapp_texts(self, texts: set[str]) -> dict[str, int]:
         normalized_texts = {"".join(text.split()) for text in texts if text.strip()}
         if not normalized_texts:

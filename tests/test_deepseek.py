@@ -54,6 +54,25 @@ class DeepSeekNormalizeTests(unittest.TestCase):
         self.assertTrue(all(item.startswith("The SOUI") for item in items))
         self.assertIn("LG09", items[2])
 
+    def test_split_work_item_text_merges_checklist_and_weather_detail_lines(self) -> None:
+        checklist_items = split_work_item_text(
+            "17/6\n\n海明例檢完成\n\nChecklist已簽\n\n"
+            "18/6\n\n海灣例檢完成\n\n5月checklist已交俾工程部"
+        )
+        weather_items = split_work_item_text(
+            "18/6 新村\n\n"
+            "G807 更換對講機 更換後測試正常\n"
+            "Mon3 cam5 轉轉鏡 需再調教路線\n"
+            "因天雨關係 需再跟進"
+        )
+
+        self.assertEqual(checklist_items, [
+            "海明例檢完成，Checklist已簽",
+            "海灣例檢完成，5月checklist已交俾工程部",
+        ])
+        self.assertEqual(len(weather_items), 2)
+        self.assertIn("因天雨關係", weather_items[1])
+
     def test_normalize_analysis_items_splits_when_model_returns_single_object(self) -> None:
         items = normalize_analysis_items(
             {"completion_status": "待人工确认", "summary": "多个项目"},

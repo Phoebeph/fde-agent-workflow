@@ -809,15 +809,21 @@ def ingest_attachment(payload: AttachmentIn) -> dict[str, object]:
     message = db.get_message_by_fingerprint(payload.message_fingerprint)
     if not message:
         raise HTTPException(status_code=404, detail="message_fingerprint not found")
+    repair_records = db.list_repair_records_for_message(message["id"])
+    matched_record = repair_records[0] if repair_records else {}
+    work_date = payload.work_date or matched_record.get("work_date") or message["sent_at"][:10]
+    site = payload.site or matched_record.get("site")
+    staff_name = payload.staff_name or matched_record.get("staff_name") or message["sender"]
+    work_type = payload.work_type or matched_record.get("work_type")
     try:
         archived = archive_attachment(
             payload.temp_path,
             settings.archive_root,
             original_filename=payload.original_filename,
-            work_date=payload.work_date or message["sent_at"][:10],
-            site=payload.site,
-            staff_name=payload.staff_name or message["sender"],
-            work_type=payload.work_type,
+            work_date=str(work_date) if work_date else None,
+            site=str(site) if site else None,
+            staff_name=str(staff_name) if staff_name else None,
+            work_type=str(work_type) if work_type else None,
             attachment_type=payload.attachment_type,
         )
     except FileNotFoundError as exc:
@@ -838,6 +844,7 @@ def ingest_attachment(payload: AttachmentIn) -> dict[str, object]:
     return {
         "inserted": inserted,
         "archive_path": archived.archive_path,
+        "archive_filename": archived.archive_filename,
         "sha256": archived.sha256,
     }
 
