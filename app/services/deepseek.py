@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import urllib.error
 import urllib.request
 from typing import Any
@@ -218,6 +219,7 @@ def normalize_analysis_items(
     attachments: list[dict[str, Any]],
     rules: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
+    chunks = split_work_item_text(str(message.get("text") or ""))
     raw_items = analysis.get("items")
     if isinstance(raw_items, list):
         normalized_items = [
@@ -226,8 +228,7 @@ def normalize_analysis_items(
             if isinstance(item, dict) and _has_meaningful_item_content(item)
         ]
         if normalized_items:
-            return normalized_items
-    chunks = split_work_item_text(str(message.get("text") or ""))
+            return _append_missing_split_items(normalized_items, chunks, message, attachments, rules)
     if len(chunks) > 1:
         items = []
         for chunk in chunks:
@@ -279,6 +280,16 @@ def _looks_like_work_line(line: str) -> bool:
         "需再",
         "需報價",
         "需报价",
+        "調教",
+        "调教",
+        "路線",
+        "路线",
+        "轉轉鏡",
+        "转转镜",
+        "重新過資料",
+        "重新过资料",
+        "等客試",
+        "等客试",
         "測試",
         "测试",
         "例檢",
@@ -286,6 +297,43 @@ def _looks_like_work_line(line: str) -> bool:
         "checklist",
     ]
     return any(marker in lowered or marker in line for marker in markers)
+
+
+def _append_missing_split_items(
+    normalized_items: list[dict[str, Any]],
+    chunks: list[str],
+    message: dict[str, Any],
+    attachments: list[dict[str, Any]],
+    rules: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if len(chunks) <= 1:
+        return normalized_items
+    existing_text = "\n".join(
+        str(item.get("summary") or item.get("result") or item.get("site") or "")
+        for item in normalized_items
+    ).casefold()
+    result = list(normalized_items)
+    for chunk in chunks:
+        if _chunk_is_covered(chunk, existing_text):
+            continue
+        item_message = dict(message)
+        item_message["text"] = chunk
+        result.append(rule_based_analysis(item_message, attachments, rules))
+    return result
+
+
+def _chunk_is_covered(chunk: str, existing_text: str) -> bool:
+    tokens = _distinctive_tokens(chunk)
+    if not tokens:
+        return False
+    return any(token in existing_text for token in tokens)
+
+
+def _distinctive_tokens(text: str) -> list[str]:
+    lowered = text.casefold()
+    tokens = re.findall(r"[a-z]+[0-9]+|[a-z][\u4e00-\u9fff]|[a-z]{3,}|[0-9]{2,}", lowered)
+    ignored = {"the", "soui", "cam", "pos", "wall", "normal", "control"}
+    return [token for token in tokens if token not in ignored]
 
 
 def _has_meaningful_item_content(item: dict[str, Any]) -> bool:

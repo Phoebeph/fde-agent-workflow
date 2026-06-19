@@ -97,6 +97,17 @@ def _is_standalone_attachment_label(text: str) -> bool:
     return False
 
 
+def _apply_staff_mapping(analysis: dict[str, object], message: dict[str, object]) -> dict[str, object]:
+    mapped = dict(analysis)
+    staff_name = str(mapped.get("staff_name") or "").strip()
+    sender = str(message.get("sender") or "").strip()
+    mapped_staff = db.resolve_staff_name(staff_name)
+    if mapped_staff == staff_name and staff_name == sender:
+        mapped_staff = db.resolve_staff_name(sender)
+    mapped["staff_name"] = mapped_staff
+    return mapped
+
+
 def _analyze_messages(messages: list[dict[str, object]], sync_feishu: bool) -> dict[str, object]:
     rules = db.list_rules()
     deepseek = deepseek_client()
@@ -132,6 +143,7 @@ def _analyze_messages(messages: list[dict[str, object]], sync_feishu: bool) -> d
             schedules = db.list_schedules_for_message(message)
             first_feishu_record_id = None
             for item_index, raw_analysis in enumerate(analyses):
+                raw_analysis = _apply_staff_mapping(raw_analysis, message)
                 analysis = apply_schedule_completion(
                     analysis=raw_analysis,
                     message=message,
@@ -914,6 +926,11 @@ def reset_analysis(payload: AnalyzeResetIn) -> dict[str, object]:
         db.mark_message_retry(message_id)
         reset += 1
     return {"reset": reset, "message_ids": payload.message_ids}
+
+
+@app.post("/api/analyze/cleanup-label-records")
+def cleanup_label_records() -> dict[str, object]:
+    return db.cleanup_mock_records_by_whatsapp_texts(ATTACHMENT_LABEL_TEXTS)
 
 
 @app.get("/api/reminders/pending")

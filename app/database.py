@@ -801,6 +801,25 @@ class Database:
                     names.append(value)
         return names
 
+    def resolve_staff_name(self, name: str) -> str:
+        candidate = str(name or "").strip()
+        if not candidate:
+            return candidate
+        normalized = candidate.casefold()
+        for staff in self.list_staff_configs():
+            if not staff.get("is_active", True):
+                continue
+            aliases = [
+                staff.get("name"),
+                staff.get("whatsapp_name"),
+                staff.get("feishu_name"),
+                staff.get("mention_name"),
+                *staff.get("aliases", []),
+            ]
+            if any(str(alias or "").strip().casefold() == normalized for alias in aliases):
+                return str(staff.get("feishu_name") or staff.get("name") or candidate)
+        return candidate
+
     def list_system_principles(self) -> list[dict[str, Any]]:
         with self.connect() as conn:
             rows = conn.execute(
@@ -1444,6 +1463,40 @@ class Database:
                 (raw_message_id,),
             )
         return int(deleted or 0)
+
+    def cleanup_mock_records_by_whatsapp_texts(self, texts: set[str]) -> dict[str, int]:
+        normalized_texts = {"".join(text.split()) for text in texts if text.strip()}
+        if not normalized_texts:
+            return {"mock_records_deleted": 0, "repair_records_deleted": 0}
+        mock_deleted = 0
+        repair_deleted = 0
+        with self.connect() as conn:
+            mock_rows = conn.execute("SELECT record_id, fields_json FROM mock_feishu_records").fetchall()
+            record_ids = []
+            for row in mock_rows:
+                fields = loads(row["fields_json"], {})
+                original_text = "".join(str(fields.get("WhatsApp原文") or "").split())
+                if original_text in normalized_texts:
+                    record_ids.append(row["record_id"])
+            for record_id in record_ids:
+                repair_deleted += int(
+                    conn.execute(
+                        "DELETE FROM repair_records WHERE feishu_record_id = ?",
+                        (record_id,),
+                    ).rowcount
+                    or 0
+                )
+                mock_deleted += int(
+                    conn.execute(
+                        "DELETE FROM mock_feishu_records WHERE record_id = ?",
+                        (record_id,),
+                    ).rowcount
+                    or 0
+                )
+        return {
+            "mock_records_deleted": mock_deleted,
+            "repair_records_deleted": repair_deleted,
+        }
 
     def save_schedule_gap_record(
         self,

@@ -74,6 +74,47 @@ class DeepSeekNormalizeTests(unittest.TestCase):
         self.assertIn("tv wall", items[0]["summary"].lower())
         self.assertEqual(items[1]["completion_status"], "需要跟进")
 
+    def test_normalize_analysis_items_appends_model_missing_split_items(self) -> None:
+        items = normalize_analysis_items(
+            {
+                "items": [
+                    {
+                        "work_date": "2026-06-18",
+                        "staff_name": "num5",
+                        "site": "G807",
+                        "work_type": "maintenance",
+                        "summary": "G807 更换对讲机",
+                        "result": "更换后测试正常",
+                        "completion_status": "已完成",
+                    },
+                    {
+                        "work_date": "2026-06-18",
+                        "staff_name": "num5",
+                        "site": "R座",
+                        "work_type": "maintenance",
+                        "summary": "R座 重新过资料",
+                        "result": "等客试",
+                        "completion_status": "需要跟进",
+                    },
+                ]
+            },
+            {
+                "sender": "num5",
+                "sent_at": "2026-06-19T10:33:00+08:00",
+                "text": (
+                    "18/6 新村\n"
+                    "G807 更換對講機 更換後測試正常\n"
+                    "R座 有客加新卡拍唔到8達通 重新過資料後等客試\n"
+                    "Mon3 cam5 轉轉鏡 需再調教路線"
+                ),
+            },
+            [],
+            [],
+        )
+
+        self.assertEqual(len(items), 3)
+        self.assertIn("Mon3", items[2]["summary"])
+
 
 if __name__ == "__main__":
     unittest.main()

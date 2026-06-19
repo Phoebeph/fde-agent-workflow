@@ -223,6 +223,39 @@ class DatabaseTests(unittest.TestCase):
             self.assertEqual(db.delete_repair_records_for_message(stored["id"]), 1)
             self.assertEqual(db.list_mock_feishu_records(limit=10), [])
 
+    def test_cleanup_mock_records_by_whatsapp_texts_removes_label_records(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db = Database(Path(temp_dir) / "test.db")
+            db.init()
+            keep_id = db.save_mock_feishu_record({"WhatsApp原文": "G807 更换对讲机"})
+            drop_id = db.save_mock_feishu_record({"WhatsApp原文": "後"})
+
+            result = db.cleanup_mock_records_by_whatsapp_texts({"後", "中"})
+
+            self.assertEqual(result["mock_records_deleted"], 1)
+            records = db.list_mock_feishu_records(limit=10)
+            self.assertEqual([record["record_id"] for record in records], [keep_id])
+            self.assertNotEqual(keep_id, drop_id)
+
+    def test_resolve_staff_name_uses_active_staff_aliases(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db = Database(Path(temp_dir) / "test.db")
+            db.init()
+            db.upsert_staff_config(
+                {
+                    "name": "Brian",
+                    "whatsapp_name": "num5",
+                    "aliases": ["強"],
+                    "feishu_name": "Brian 強",
+                    "roles": ["technician"],
+                    "is_active": True,
+                }
+            )
+
+            self.assertEqual(db.resolve_staff_name("num5"), "Brian 強")
+            self.assertEqual(db.resolve_staff_name("強"), "Brian 強")
+            self.assertEqual(db.resolve_staff_name("unknown"), "unknown")
+
     def test_init_repairs_reminders_foreign_key_to_old_repair_table(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             db = Database(Path(temp_dir) / "test.db")
