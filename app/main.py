@@ -32,6 +32,7 @@ from app.services.dispatch import discover_dispatch_schedules, followup_tracking
 from app.services.feishu import FeishuClient, FeishuError
 from app.services.fingerprint import message_fingerprint
 from app.services.issues import issue_candidate_from_message, issue_schedule_match_score
+from app.services.local_export import export_daily_workbook
 from app.services.rules import load_rules_from_xlsx
 
 
@@ -791,6 +792,21 @@ def status() -> dict[str, object]:
     return {
         "health": health(),
         "counts": db.count_rows(),
+    }
+
+
+@app.post("/api/exports/daily")
+def export_daily(work_date: str = Query(min_length=10, max_length=10)) -> dict[str, object]:
+    result = export_daily_workbook(
+        db=db,
+        work_date=work_date,
+        export_root=settings.exports_root,
+    )
+    return {
+        "work_date": work_date,
+        "total_path": result.total_path,
+        "site_paths": result.site_paths,
+        "site_count": len(result.site_paths),
     }
 
 

@@ -39,18 +39,36 @@ def _csv_env(name: str, default: tuple[str, ...]) -> tuple[str, ...]:
     return values or default
 
 
+def _path_env(name: str, default: str | Path) -> Path:
+    raw = os.getenv(name)
+    if raw:
+        return Path(raw)
+    return Path(default)
+
+
+DATA_ROOT_ENV = os.getenv("DATA_ROOT", "")
+DATA_ROOT = Path(DATA_ROOT_ENV) if DATA_ROOT_ENV else None
+
+
 @dataclass(frozen=True)
 class Settings:
     app_env: str = os.getenv("APP_ENV", "development")
     app_host: str = os.getenv("APP_HOST", "127.0.0.1")
     app_port: int = _int_env("APP_PORT", 8000)
 
-    database_path: Path = Path(os.getenv("DATABASE_PATH", "./data/whatsapp_repair.db"))
-    archive_root: Path = Path(os.getenv("ARCHIVE_ROOT", "./archive"))
-    downloads_root: Path = Path(os.getenv("DOWNLOADS_ROOT", "./downloads/yingdao"))
-    exports_root: Path = Path(os.getenv("EXPORTS_ROOT", "./exports"))
-    logs_root: Path = Path(os.getenv("LOGS_ROOT", "./logs"))
-    backups_root: Path = Path(os.getenv("BACKUPS_ROOT", "./backups"))
+    data_root: Path = _path_env("DATA_ROOT", "./data")
+    database_path: Path = _path_env(
+        "DATABASE_PATH",
+        (DATA_ROOT / "database" / "whatsapp_repair.db") if DATA_ROOT else "./data/whatsapp_repair.db",
+    )
+    archive_root: Path = _path_env("ARCHIVE_ROOT", DATA_ROOT if DATA_ROOT else "./archive")
+    downloads_root: Path = _path_env(
+        "DOWNLOADS_ROOT",
+        (DATA_ROOT / "downloads" / "yingdao") if DATA_ROOT else "./downloads/yingdao",
+    )
+    exports_root: Path = _path_env("EXPORTS_ROOT", DATA_ROOT if DATA_ROOT else "./exports")
+    logs_root: Path = _path_env("LOGS_ROOT", (DATA_ROOT / "logs") if DATA_ROOT else "./logs")
+    backups_root: Path = _path_env("BACKUPS_ROOT", (DATA_ROOT / "backups") if DATA_ROOT else "./backups")
 
     deepseek_api_key: str = os.getenv("DEEPSEEK_API_KEY", "")
     deepseek_base_url: str = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")

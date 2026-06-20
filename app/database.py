@@ -1482,6 +1482,87 @@ class Database:
             records.append(record)
         return records
 
+    def list_export_repair_records(self, work_date: str, site: str | None = None) -> list[dict[str, Any]]:
+        params: list[Any] = [work_date]
+        site_filter = ""
+        if site:
+            site_filter = "AND COALESCE(rr.site, '') = ?"
+            params.append(site)
+        with self.connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT
+                    rr.*,
+                    rm.sent_at AS whatsapp_sent_at,
+                    rm.sender AS whatsapp_sender,
+                    rm.text AS whatsapp_text,
+                    rm.message_fingerprint,
+                    ws.task_text AS schedule_task_text
+                FROM repair_records rr
+                LEFT JOIN raw_messages rm ON rm.id = rr.raw_message_id
+                LEFT JOIN work_schedules ws ON ws.id = rr.work_schedule_id
+                WHERE rr.work_date = ?
+                  {site_filter}
+                ORDER BY COALESCE(rr.site, ''), rr.staff_name, rr.id
+                """,
+                tuple(params),
+            ).fetchall()
+        records = []
+        for row in rows:
+            record = dict(row)
+            record["missing_items"] = loads(record.pop("missing_items_json", "[]"), [])
+            record["next_actions"] = loads(record.pop("next_actions_json", "[]"), [])
+            records.append(record)
+        return records
+
+    def list_export_attachment_checks(self, work_date: str, site: str | None = None) -> list[dict[str, Any]]:
+        records = self.list_export_repair_records(work_date, site)
+        with self.connect() as conn:
+            for record in records:
+                raw_message_id = record.get("raw_message_id")
+                attachments = []
+                if raw_message_id:
+                    attachments = [
+                        dict(row)
+                        for row in conn.execute(
+                            "SELECT * FROM attachments WHERE raw_message_id = ? ORDER BY id ASC",
+                            (raw_message_id,),
+                        ).fetchall()
+                    ]
+                record["attachments"] = attachments
+        return records
+
+    def list_export_reminders(self, work_date: str, site: str | None = None) -> list[dict[str, Any]]:
+        params: list[Any] = [work_date]
+        site_filter = ""
+        if site:
+            site_filter = "AND COALESCE(rr.site, '') = ?"
+            params.append(site)
+        with self.connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT
+                    r.*,
+                    rr.work_date,
+                    rr.staff_name,
+                    rr.site,
+                    rr.summary,
+                    rr.completion_status
+                FROM reminders r
+                JOIN repair_records rr ON rr.id = r.repair_record_id
+                WHERE rr.work_date = ?
+                  {site_filter}
+                ORDER BY COALESCE(rr.site, ''), r.created_at ASC, r.id ASC
+                """,
+                tuple(params),
+            ).fetchall()
+        reminders = []
+        for row in rows:
+            reminder = dict(row)
+            reminder["result_payload"] = loads(reminder.pop("result_payload_json", "{}"), {})
+            reminders.append(reminder)
+        return reminders
+
     def cleanup_mock_records_by_whatsapp_texts(self, texts: set[str]) -> dict[str, int]:
         normalized_texts = {"".join(text.split()) for text in texts if text.strip()}
         if not normalized_texts:
