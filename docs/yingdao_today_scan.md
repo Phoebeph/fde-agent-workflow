@@ -170,7 +170,7 @@ Content-Type: application/json
 后端会把文件归档到：
 
 ```text
-archive/YYYY/MM/site/
+archive/YYYY/MM/DD/site/
 ```
 
 SQLite 只保存文件名、路径、hash、类型和关联消息 ID，不保存图片/PDF 二进制内容。

@@ -30,6 +30,7 @@ class ArchiveTests(unittest.TestCase):
             target = Path(archived.archive_path)
             self.assertTrue(target.exists())
             self.assertEqual(target.read_bytes(), b"pdf-bytes")
+            self.assertEqual(target.parent.parts[-4:], ("2026", "06", "10", "商场LY"))
             self.assertIn("2026-06-10_商场LY_Kei_maintenance_pdf", target.name)
             self.assertEqual(archived.archive_filename, target.name)
             self.assertTrue(archived.sha256)

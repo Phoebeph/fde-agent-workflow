@@ -12,9 +12,10 @@ C:\AI-Repair-system\
   archive\
     2026\
       06\
-        The_SOUI\
-          2026-06-19_The_SOUI_num5_maintenance_image_xxxxx.jpg
-          2026-06-19_The_SOUI_num5_maintenance_pdf_xxxxx.pdf
+        19\
+          The_SOUI\
+            2026-06-19_The_SOUI_num5_maintenance_image_xxxxx.jpg
+            2026-06-19_The_SOUI_num5_maintenance_pdf_xxxxx.pdf
   downloads\
     yingdao\                    影刀临时下载目录，文件回传后由后端复制到 archive
   exports\
@@ -114,6 +115,18 @@ POST /api/whatsapp/attachments
 ```
 
 如果影刀没有传 `site/staff_name/work_type/work_date`，后端会尝试使用已分析出的维修记录字段自动命名归档文件。
+
+附件正式归档目录为：
+
+```text
+archive\年\月\日\地点\
+```
+
+例如：
+
+```text
+archive\2026\06\19\The_SOUI\2026-06-19_The_SOUI_num5_maintenance_image_xxxxx.jpg
+```
 
 ### 4. 发送提醒
 

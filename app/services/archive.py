@@ -55,7 +55,8 @@ def archive_attachment(
 
     year = date_part[:4] if len(date_part) >= 4 and date_part[:4].isdigit() else "unknown_year"
     month = date_part[5:7] if len(date_part) >= 7 and date_part[5:7].isdigit() else "unknown_month"
-    target_dir = archive_root / year / month / site_part
+    day = date_part[8:10] if len(date_part) >= 10 and date_part[8:10].isdigit() else "unknown_day"
+    target_dir = archive_root / year / month / day / site_part
     target_dir.mkdir(parents=True, exist_ok=True)
 
     base_name = f"{date_part}_{site_part}_{staff_part}_{work_part}_{type_part}_{digest[:10]}{ext.lower()}"

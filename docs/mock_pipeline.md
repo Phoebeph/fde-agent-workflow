@@ -90,7 +90,7 @@ Body:
 - hash
 - 文件大小
 
-文件本体继续保存在 `archive/YYYY/MM/site/`。
+文件本体继续保存在 `archive/YYYY/MM/DD/site/`。
 
 ## 每日任务完成度检查
 
