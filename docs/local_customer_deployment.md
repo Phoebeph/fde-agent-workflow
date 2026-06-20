@@ -18,8 +18,7 @@ C:\AI-Repair-system\
   downloads\
     yingdao\                    影刀临时下载目录，文件回传后由后端复制到 archive
   exports\
-    daily\                      后续导出的每日维修记录 CSV/XLSX
-    reminders\                  后续导出的提醒记录
+    2026-06-19_维修记录与提醒.xlsx  后续导出的每日综合检查表
   logs\
     backend.log                 后端运行日志
     yingdao.log                 影刀流程日志
@@ -32,8 +31,14 @@ C:\AI-Repair-system\
 ```text
 DATABASE_PATH=./data/whatsapp_repair.db
 ARCHIVE_ROOT=./archive
+DOWNLOADS_ROOT=./downloads/yingdao
+EXPORTS_ROOT=./exports
+LOGS_ROOT=./logs
+BACKUPS_ROOT=./backups
 FEISHU_MOCK_MODE=true
 ```
+
+后端启动时会自动创建 `data/`、`archive/`、`downloads/yingdao/`、`exports/`、`logs/`、`backups/`。客户电脑不需要手工逐个建立目录。
 
 即使不使用飞书，`FEISHU_MOCK_MODE=true` 仍可作为本地分析结果表使用，方便通过 `/api/mock/feishu/records` 查看 AI 输出。
 
@@ -44,6 +49,23 @@ FEISHU_MOCK_MODE=true
 - `attachments`：附件索引，只保存文件路径、hash、类型，不把图片/PDF 二进制写进数据库。
 - `reminders`：待影刀发送的 WhatsApp 提醒内容。
 - `archive/`：真正保存 photo record、维修报告 PDF、其他附件。
+- `exports/`：给客户日后检查用的综合报表；建议一日一个文件，同时包含维修记录、附件检查状态和 WhatsApp 提醒记录。
+
+## 综合导出文件建议
+
+`exports/` 不再分开保存维修记录和提醒记录，建议每天导出一个综合 Excel：
+
+```text
+exports\2026-06-19_维修记录与提醒.xlsx
+```
+
+建议包含 3 个 sheet：
+
+- `维修记录`：日期、同事、地点、工作类型、AI摘要、维修结果、完成状态、待办事项、WhatsApp消息时间。
+- `附件检查`：维修记录 ID、是否需要 photo record、是否需要维修报告 PDF、已归档文件名、本地归档路径、缺失资料。
+- `提醒记录`：提醒对象、提醒原因、提醒内容、状态、发送时间、是否已解决。
+
+这样客户日后只查一个文件，就能同时看到工作记录、附件是否齐全、哪些提醒已经发过。
 
 ## 影刀流程
 

@@ -37,7 +37,7 @@ from app.services.rules import load_rules_from_xlsx
 
 app = FastAPI(title="WhatsApp Repair AI Backend", version="0.1.0")
 db = Database(settings.database_path)
-DOWNLOADS_DIR = Path("downloads")
+DOWNLOADS_DIR = settings.downloads_root
 AUTOMATION_NOTICE_MARKERS = ("自动化助手提示",)
 ATTACHMENT_LABEL_TEXTS = {
     "前",
@@ -106,6 +106,18 @@ def _apply_staff_mapping(analysis: dict[str, object], message: dict[str, object]
         mapped_staff = db.resolve_staff_name(sender)
     mapped["staff_name"] = mapped_staff
     return mapped
+
+
+def _ensure_local_directories() -> None:
+    settings.database_path.parent.mkdir(parents=True, exist_ok=True)
+    for path in (
+        settings.archive_root,
+        settings.downloads_root,
+        settings.exports_root,
+        settings.logs_root,
+        settings.backups_root,
+    ):
+        path.mkdir(parents=True, exist_ok=True)
 
 
 def _analyze_messages(messages: list[dict[str, object]], sync_feishu: bool) -> dict[str, object]:
@@ -541,6 +553,7 @@ def _create_manual_mock_attachments(
 
 @app.on_event("startup")
 def startup() -> None:
+    _ensure_local_directories()
     db.init()
 
 

@@ -47,6 +47,10 @@ class Settings:
 
     database_path: Path = Path(os.getenv("DATABASE_PATH", "./data/whatsapp_repair.db"))
     archive_root: Path = Path(os.getenv("ARCHIVE_ROOT", "./archive"))
+    downloads_root: Path = Path(os.getenv("DOWNLOADS_ROOT", "./downloads/yingdao"))
+    exports_root: Path = Path(os.getenv("EXPORTS_ROOT", "./exports"))
+    logs_root: Path = Path(os.getenv("LOGS_ROOT", "./logs"))
+    backups_root: Path = Path(os.getenv("BACKUPS_ROOT", "./backups"))
 
     deepseek_api_key: str = os.getenv("DEEPSEEK_API_KEY", "")
     deepseek_base_url: str = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
