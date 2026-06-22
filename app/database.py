@@ -559,6 +559,19 @@ class Database:
             ).fetchall()
         return [self._message_row(row) for row in rows]
 
+    def list_messages_for_date(self, work_date: str, limit: int = 500) -> list[dict[str, Any]]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM raw_messages
+                WHERE substr(sent_at, 1, 10) = ?
+                ORDER BY sent_at ASC, id ASC
+                LIMIT ?
+                """,
+                (work_date, limit),
+            ).fetchall()
+        return [self._message_row(row) for row in rows]
+
     def count_rows(self) -> dict[str, int]:
         tables = [
             "raw_messages",

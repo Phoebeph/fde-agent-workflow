@@ -27,6 +27,7 @@ from app.schemas import (
 )
 from app.services.archive import archive_attachment
 from app.services.completion import apply_schedule_completion, schedule_gap_analysis
+from app.services.diagnostics import build_location_coverage_report
 from app.services.deepseek import DeepSeekClient, DeepSeekError
 from app.services.dispatch import discover_dispatch_schedules, followup_tracking_to_event
 from app.services.feishu import FeishuClient, FeishuError
@@ -808,6 +809,14 @@ def export_daily(work_date: str = Query(min_length=10, max_length=10)) -> dict[s
         "site_paths": result.site_paths,
         "site_count": len(result.site_paths),
     }
+
+
+@app.get("/api/exports/diagnostics")
+def export_diagnostics(work_date: str = Query(min_length=10, max_length=10)) -> dict[str, object]:
+    return build_location_coverage_report(
+        messages=db.list_messages_for_date(work_date),
+        repair_records=db.list_export_repair_records(work_date),
+    )
 
 
 @app.get("/api/runs/recent")
