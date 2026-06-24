@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
+import re
 import threading
 import uuid
 
@@ -296,11 +297,32 @@ def _analyze_pending_messages(limit: int, sync_feishu: bool) -> dict[str, object
 
 def _message_sent_dates(messages: list[dict[str, object]]) -> list[str]:
     dates = {
-        str(message.get("sent_at") or "")[:10]
+        _export_date_from_sent_at(str(message.get("sent_at") or ""))
         for message in messages
-        if len(str(message.get("sent_at") or "")) >= 10
+        if str(message.get("sent_at") or "")
     }
     return sorted(date for date in dates if date)
+
+
+def _export_date_from_sent_at(value: str) -> str:
+    raw = value.strip()
+    if len(raw) >= 10 and raw[:4].isdigit() and raw[4] == "-" and raw[7] == "-":
+        return raw[:10]
+    match = re.search(r"(?P<a>\d{1,2})/(?P<b>\d{1,2})/(?P<year>\d{4})", raw)
+    if not match:
+        return raw[:10] if len(raw) >= 10 else ""
+    first = int(match.group("a"))
+    second = int(match.group("b"))
+    year = int(match.group("year"))
+    day = first
+    month = second
+    if first <= 12 and second > 12:
+        month = first
+        day = second
+    try:
+        return datetime(year, month, day).strftime("%Y-%m-%d")
+    except ValueError:
+        return ""
 
 
 def _export_daily_workbooks_for_messages(messages: list[dict[str, object]]) -> list[dict[str, object]]:

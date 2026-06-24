@@ -3,6 +3,7 @@ from __future__ import annotations
 import datetime
 import hashlib
 import json
+import re
 import time
 import urllib.error
 import urllib.request
@@ -122,9 +123,9 @@ def extract_visible_messages(page: Any) -> list[dict[str, Any]]:
 
         messages.append(
             {
-                "发送者": sender or "未知",
-                "消息内容": text,
-                "时间": sent_at,
+                "sender": sender or "未知",
+                "text": text,
+                "sent_at": sent_at,
                 "external_message_id": external_message_id,
                 "has_attachments": has_attachments,
                 "attachment_hints": attachment_hints,
@@ -205,7 +206,11 @@ def post_messages(messages: list[dict[str, Any]], scan_mode: str) -> dict[str, A
         },
     }
     result = post_json(f"{BACKEND_BASE_URL}/api/whatsapp/messages", payload)
-    print(f"已提交后端 scan_mode={scan_mode}, messages={len(messages)}, result={result.get('messages')}")
+    print(
+        "已提交后端 "
+        f"scan_mode={scan_mode}, messages={len(messages)}, "
+        f"result={result.get('messages')}, auto_pipeline={result.get('auto_pipeline')}"
+    )
     return result
 
 
@@ -228,7 +233,42 @@ def normalize_whatsapp_time(msg_date: str, msg_time: str) -> str:
     date_text = msg_date.strip() or f"{today.day}/{today.month}/{today.year}"
     if date_text in {"今天", "TODAY", "Today"}:
         date_text = f"{today.day}/{today.month}/{today.year}"
+    parsed = parse_whatsapp_datetime(date_text, msg_time)
+    if parsed:
+        return parsed.replace(
+            tzinfo=datetime.timezone(datetime.timedelta(hours=8))
+        ).isoformat(timespec="seconds")
     return f"{date_text} {msg_time}".strip()
+
+
+def parse_whatsapp_datetime(msg_date: str, msg_time: str) -> datetime.datetime | None:
+    date_match = re.search(r"(?P<a>\d{1,2})/(?P<b>\d{1,2})/(?P<year>\d{4})", msg_date)
+    time_match = re.search(r"(?P<period>上午|下午|AM|PM|am|pm)?\s*(?P<hour>\d{1,2}):(?P<minute>\d{2})", msg_time)
+    if not date_match or not time_match:
+        return None
+
+    first = int(date_match.group("a"))
+    second = int(date_match.group("b"))
+    year = int(date_match.group("year"))
+    # Hong Kong WhatsApp commonly shows day/month/year. If the first number is impossible
+    # as a day but possible as a month, fall back to month/day/year.
+    day = first
+    month = second
+    if first <= 12 and second > 12:
+        month = first
+        day = second
+
+    hour = int(time_match.group("hour"))
+    minute = int(time_match.group("minute"))
+    period = time_match.group("period")
+    if period in {"下午", "PM", "pm"} and hour < 12:
+        hour += 12
+    elif period in {"上午", "AM", "am"} and hour == 12:
+        hour = 0
+    try:
+        return datetime.datetime(year, month, day, hour, minute)
+    except ValueError:
+        return None
 
 
 def is_today_message(message: dict[str, Any]) -> bool:
@@ -239,6 +279,7 @@ def is_today_message(message: dict[str, Any]) -> bool:
 def is_today_date(value: str) -> bool:
     now = datetime.datetime.now()
     targets = {
+        now.strftime("%Y-%m-%d"),
         f"{now.day}/{now.month}/{now.year}",
         now.strftime("%d/%m/%Y"),
         f"{now.month}/{now.day}/{now.year}",
