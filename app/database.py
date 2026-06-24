@@ -621,6 +621,19 @@ class Database:
             ).fetchone()
         return self._message_row(row) if row else None
 
+    def get_message_by_external_id(self, external_message_id: str) -> dict[str, Any] | None:
+        with self.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT * FROM raw_messages
+                WHERE external_message_id = ?
+                ORDER BY sent_at DESC, id DESC
+                LIMIT 1
+                """,
+                (external_message_id,),
+            ).fetchone()
+        return self._message_row(row) if row else None
+
     def list_messages_by_fingerprints(self, fingerprints: list[str]) -> list[dict[str, Any]]:
         if not fingerprints:
             return []

@@ -131,6 +131,36 @@ http://127.0.0.1:8000/admin/settings
 - `text` 取不到但有附件时，可以提交空文本加 `has_attachments=true`。
 - OCR 只作为兜底，并在 `raw_payload.extract_method` 标记为 `ocr_fallback`。
 
+## 推荐运行方式：早上回填 + 白天增量
+
+客户希望影刀一天中持续扫描 WhatsApp 群消息时，建议拆成两个节奏：
+
+1. 每天 08:00 后做一次初始化回填：滚动到 `今天` 分隔线附近，边滚动边采集当天已经出现的消息，并提交到后端。
+2. 白天每 5 分钟做一次增量扫描：滚动到底部，读取最近可见消息，建议取最近 80 条。
+
+增量扫描取 80 条比 30-50 条更稳，因为 WhatsApp 群在短时间内可能连续发照片、PDF、补充说明和短标签。后端会按消息指纹去重，所以重复提交最近 80 条不会重复生成维修记录或提醒。
+
+参考代码见：
+
+```text
+scripts/yingdao_whatsapp_scan.py
+```
+
+扫描阶段只提交消息和附件提示：
+
+```json
+{
+  "发送者": "num5",
+  "消息内容": "The SOUI Tv wall 正常",
+  "时间": "24/6/2026 上午10:51",
+  "external_message_id": "yingdao_xxxxx",
+  "has_attachments": false,
+  "attachment_hints": []
+}
+```
+
+附件消息必须带 `external_message_id`。后续下载附件时，影刀可以用 `external_message_id` 或 `message_fingerprint` 回传给后端。
+
 ## 流程二：whatsapp_download_attachments
 
 影刀流程名建议：`whatsapp_download_attachments`。
@@ -141,7 +171,7 @@ http://127.0.0.1:8000/admin/settings
 GET http://127.0.0.1:8000/api/whatsapp/download-jobs?limit=50
 ```
 
-每个任务会包含 `message_fingerprint`、发送人、时间、正文、附件提示等信息。影刀按这些信息回到 WhatsApp Web 找到对应消息。
+每个任务会包含 `message_fingerprint`、`external_message_id`、发送人、时间、正文、附件提示等信息。影刀按这些信息回到 WhatsApp Web 找到对应消息。
 
 ### 下载和回传
 
@@ -156,7 +186,7 @@ Content-Type: application/json
 
 ```json
 {
-  "message_fingerprint": "xxx",
+  "external_message_id": "yingdao_xxxxx",
   "original_filename": "report.pdf",
   "temp_path": "/Users/mac/Desktop/ai_projects/whatsapp/downloads/report.pdf",
   "attachment_type": "pdf",

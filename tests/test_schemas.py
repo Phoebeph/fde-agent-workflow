@@ -1,8 +1,9 @@
 import unittest
 from unittest.mock import patch
+from pydantic import ValidationError
 
 from app.config import Settings
-from app.schemas import WhatsAppMessageBatchIn
+from app.schemas import AttachmentIn, WhatsAppMessageBatchIn
 
 
 class SchemaTests(unittest.TestCase):
@@ -88,6 +89,29 @@ class SchemaTests(unittest.TestCase):
 
         self.assertEqual(payload.group_name, "WhatsApp")
         self.assertEqual(len(payload.messages), 1)
+
+    def test_attachment_accepts_external_message_id_reference(self) -> None:
+        payload = AttachmentIn.model_validate(
+            {
+                "external_message_id": "yingdao_abc",
+                "original_filename": "photo.jpg",
+                "temp_path": "C:/Users/test/data/downloads/yingdao/photo.jpg",
+                "attachment_type": "image",
+            }
+        )
+
+        self.assertEqual(payload.external_message_id, "yingdao_abc")
+        self.assertIsNone(payload.message_fingerprint)
+
+    def test_attachment_requires_message_reference(self) -> None:
+        with self.assertRaises(ValidationError):
+            AttachmentIn.model_validate(
+                {
+                    "original_filename": "photo.jpg",
+                    "temp_path": "C:/Users/test/data/downloads/yingdao/photo.jpg",
+                    "attachment_type": "image",
+                }
+            )
 
 
 if __name__ == "__main__":

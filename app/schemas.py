@@ -144,7 +144,8 @@ class MockWhatsAppMessageIn(BaseModel):
 
 
 class AttachmentIn(BaseModel):
-    message_fingerprint: str = Field(min_length=16)
+    message_fingerprint: str | None = Field(default=None, min_length=16)
+    external_message_id: str | None = Field(default=None, min_length=1)
     original_filename: str = Field(min_length=1)
     temp_path: str = Field(min_length=1)
     attachment_type: Literal["image", "pdf", "video", "document", "other"] = "other"
@@ -152,6 +153,12 @@ class AttachmentIn(BaseModel):
     site: str | None = None
     work_type: str | None = None
     work_date: str | None = None
+
+    @model_validator(mode="after")
+    def require_message_reference(self) -> "AttachmentIn":
+        if not self.message_fingerprint and not self.external_message_id:
+            raise ValueError("message_fingerprint or external_message_id is required")
+        return self
 
 
 class RuleImportIn(BaseModel):

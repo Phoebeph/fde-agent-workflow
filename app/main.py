@@ -1087,9 +1087,13 @@ def ingest_attachment(
     payload: AttachmentIn,
     background_tasks: BackgroundTasks,
 ) -> dict[str, object]:
-    message = db.get_message_by_fingerprint(payload.message_fingerprint)
+    message = None
+    if payload.message_fingerprint:
+        message = db.get_message_by_fingerprint(payload.message_fingerprint)
+    if not message and payload.external_message_id:
+        message = db.get_message_by_external_id(payload.external_message_id)
     if not message:
-        raise HTTPException(status_code=404, detail="message_fingerprint not found")
+        raise HTTPException(status_code=404, detail="message reference not found")
     repair_records = db.list_repair_records_for_message(message["id"])
     matched_record = repair_records[0] if repair_records else {}
     work_date = payload.work_date or matched_record.get("work_date") or message["sent_at"][:10]
@@ -1126,7 +1130,7 @@ def ingest_attachment(
     if inserted:
         db.mark_message_retry(message["id"])
         auto_pipeline = _schedule_post_ingest_pipeline(
-            fingerprints=[payload.message_fingerprint],
+            fingerprints=[message["message_fingerprint"]],
             background_tasks=background_tasks,
         )
     return {
