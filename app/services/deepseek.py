@@ -4,6 +4,7 @@ import json
 import re
 import urllib.error
 import urllib.request
+from datetime import datetime
 from typing import Any
 
 from app.services.scoring import apply_completion_score
@@ -179,7 +180,7 @@ def rule_based_analysis(
 
     return normalize_analysis(
         {
-            "work_date": message.get("sent_at", "")[:10],
+            "work_date": infer_work_date_from_text(text, str(message.get("sent_at", "")[:10])),
             "staff_name": message.get("sender", ""),
             "site": "",
             "work_type": work_type,
@@ -213,6 +214,26 @@ def rule_based_analysis_items(
     return items
 
 
+def infer_work_date_from_text(text: str, fallback_date: str) -> str:
+    match = re.search(r"(?<!\d)(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?", text)
+    if not match:
+        return fallback_date
+    fallback_year = fallback_date[:4] if len(fallback_date) >= 4 else ""
+    year_text = match.group(3)
+    if year_text:
+        year = int(year_text)
+        if year < 100:
+            year += 2000
+    elif fallback_year.isdigit():
+        year = int(fallback_year)
+    else:
+        return fallback_date
+    try:
+        return datetime(year, int(match.group(2)), int(match.group(1))).strftime("%Y-%m-%d")
+    except ValueError:
+        return fallback_date
+
+
 def normalize_analysis_items(
     analysis: dict[str, Any],
     message: dict[str, Any],
@@ -243,18 +264,28 @@ def split_work_item_text(text: str) -> list[str]:
     lines = [line.strip(" \t-•⁠") for line in text.splitlines()]
     items: list[str] = []
     current_heading = ""
+    current_date = ""
     for line in lines:
         if not line:
+            continue
+        if _looks_like_date_heading(line):
+            current_date = line
             continue
         if _is_followup_detail_line(line) and items:
             items[-1] = f"{items[-1]}，{line}"
             continue
         if _looks_like_site_heading(line) and not _looks_like_work_line(line):
-            current_heading = line
+            current_heading = f"{current_date} {line}".strip()
             continue
         if _looks_like_work_line(line):
-            items.append(f"{current_heading} {line}".strip())
+            heading = current_heading or current_date
+            items.append(f"{heading} {line}".strip())
     return items or [text.strip()]
+
+
+def _looks_like_date_heading(line: str) -> bool:
+    compact = "".join(line.split())
+    return bool(re.fullmatch(r"\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?", compact))
 
 
 def _looks_like_site_heading(line: str) -> bool:

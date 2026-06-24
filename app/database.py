@@ -34,6 +34,16 @@ CREATE TABLE IF NOT EXISTS system_principles (
     updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS sites (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    aliases_json TEXT NOT NULL DEFAULT '[]',
+    notes TEXT NOT NULL DEFAULT '',
+    is_active INTEGER NOT NULL DEFAULT 1,
+    updated_at TEXT,
+    created_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS raw_messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     group_name TEXT NOT NULL,
@@ -284,6 +294,17 @@ class Database:
         if "updated_at" not in staff_columns:
             conn.execute("ALTER TABLE staff ADD COLUMN updated_at TEXT")
         self._seed_default_principles(conn)
+        site_columns = {
+            row["name"] for row in conn.execute("PRAGMA table_info(sites)").fetchall()
+        }
+        if "aliases_json" not in site_columns:
+            conn.execute("ALTER TABLE sites ADD COLUMN aliases_json TEXT NOT NULL DEFAULT '[]'")
+        if "notes" not in site_columns:
+            conn.execute("ALTER TABLE sites ADD COLUMN notes TEXT NOT NULL DEFAULT ''")
+        if "is_active" not in site_columns:
+            conn.execute("ALTER TABLE sites ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1")
+        if "updated_at" not in site_columns:
+            conn.execute("ALTER TABLE sites ADD COLUMN updated_at TEXT")
         repair_columns = {
             row["name"] for row in conn.execute("PRAGMA table_info(repair_records)").fetchall()
         }
@@ -813,6 +834,106 @@ class Database:
                 if value and value not in names:
                     names.append(value)
         return names
+
+    def list_site_configs(self) -> list[dict[str, Any]]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM sites
+                ORDER BY is_active DESC, name ASC
+                """
+            ).fetchall()
+        return [self._site_row(row) for row in rows]
+
+    def upsert_site_config(self, site: dict[str, Any]) -> int:
+        now = utc_now()
+        aliases = site.get("aliases", [])
+        with self.connect() as conn:
+            if site.get("id"):
+                existing = conn.execute("SELECT id FROM sites WHERE id = ?", (site["id"],)).fetchone()
+                if not existing:
+                    raise ValueError("site id not found")
+                conn.execute(
+                    """
+                    UPDATE sites
+                    SET name = ?, aliases_json = ?, notes = ?, is_active = ?, updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        site["name"],
+                        dumps(aliases),
+                        site.get("notes", ""),
+                        1 if site.get("is_active", True) else 0,
+                        now,
+                        site["id"],
+                    ),
+                )
+                return int(site["id"])
+            conn.execute(
+                """
+                INSERT INTO sites (name, aliases_json, notes, is_active, updated_at, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(name) DO UPDATE SET
+                    aliases_json = excluded.aliases_json,
+                    notes = excluded.notes,
+                    is_active = excluded.is_active,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    site["name"],
+                    dumps(aliases),
+                    site.get("notes", ""),
+                    1 if site.get("is_active", True) else 0,
+                    now,
+                    now,
+                ),
+            )
+            row = conn.execute("SELECT id FROM sites WHERE name = ?", (site["name"],)).fetchone()
+        return int(row["id"])
+
+    def set_site_active(self, site_id: int, is_active: bool) -> bool:
+        with self.connect() as conn:
+            cur = conn.execute(
+                """
+                UPDATE sites
+                SET is_active = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (1 if is_active else 0, utc_now(), site_id),
+            )
+        return bool(cur.rowcount)
+
+    def resolve_site_name(self, value: str) -> str:
+        candidate = str(value or "").strip()
+        if not candidate:
+            return candidate
+        normalized = candidate.casefold()
+        for site in self.list_site_configs():
+            if not site.get("is_active", True):
+                continue
+            aliases = [site.get("name"), *site.get("aliases", [])]
+            if any(str(alias or "").strip().casefold() == normalized for alias in aliases):
+                return str(site.get("name") or candidate)
+        return candidate
+
+    def match_site_in_text(self, text: str) -> dict[str, Any] | None:
+        haystack = str(text or "").casefold()
+        if not haystack:
+            return None
+        candidates: list[tuple[int, dict[str, Any], str]] = []
+        for site in self.list_site_configs():
+            if not site.get("is_active", True):
+                continue
+            for alias in [site.get("name"), *site.get("aliases", [])]:
+                value = str(alias or "").strip()
+                if not value:
+                    continue
+                if value.casefold() in haystack:
+                    candidates.append((len(value), site, value))
+        if not candidates:
+            return None
+        _, site, matched = sorted(candidates, key=lambda item: item[0], reverse=True)[0]
+        return {"name": site["name"], "matched": matched, "site": site}
 
     def resolve_staff_name(self, name: str) -> str:
         candidate = str(name or "").strip()
@@ -1506,6 +1627,7 @@ class Database:
                 f"""
                 SELECT
                     rr.*,
+                    COALESCE(substr(rm.sent_at, 1, 10), rr.work_date) AS export_date,
                     rm.sent_at AS whatsapp_sent_at,
                     rm.sender AS whatsapp_sender,
                     rm.text AS whatsapp_text,
@@ -1514,7 +1636,7 @@ class Database:
                 FROM repair_records rr
                 LEFT JOIN raw_messages rm ON rm.id = rr.raw_message_id
                 LEFT JOIN work_schedules ws ON ws.id = rr.work_schedule_id
-                WHERE rr.work_date = ?
+                WHERE COALESCE(substr(rm.sent_at, 1, 10), rr.work_date) = ?
                   {site_filter}
                 ORDER BY COALESCE(rr.site, ''), rr.staff_name, rr.id
                 """,
@@ -1556,6 +1678,7 @@ class Database:
                 f"""
                 SELECT
                     r.*,
+                    COALESCE(substr(rm.sent_at, 1, 10), rr.work_date) AS export_date,
                     rr.work_date,
                     rr.staff_name,
                     rr.site,
@@ -1563,7 +1686,8 @@ class Database:
                     rr.completion_status
                 FROM reminders r
                 JOIN repair_records rr ON rr.id = r.repair_record_id
-                WHERE rr.work_date = ?
+                LEFT JOIN raw_messages rm ON rm.id = rr.raw_message_id
+                WHERE COALESCE(substr(rm.sent_at, 1, 10), rr.work_date) = ?
                   {site_filter}
                 ORDER BY COALESCE(rr.site, ''), r.created_at ASC, r.id ASC
                 """,
@@ -1809,5 +1933,12 @@ class Database:
         data = dict(row)
         data["aliases"] = loads(data.pop("aliases_json", "[]"), [])
         data["roles"] = loads(data.pop("roles_json", "[]"), [])
+        data["is_active"] = bool(data["is_active"])
+        return data
+
+    @staticmethod
+    def _site_row(row: sqlite3.Row) -> dict[str, Any]:
+        data = dict(row)
+        data["aliases"] = loads(data.pop("aliases_json", "[]"), [])
         data["is_active"] = bool(data["is_active"])
         return data

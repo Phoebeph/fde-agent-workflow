@@ -11,6 +11,7 @@ class FakeExportDatabase:
         records = [
             {
                 "id": 1,
+                "export_date": work_date,
                 "work_date": work_date,
                 "staff_name": "Brian",
                 "site": "The SOUI",
@@ -26,6 +27,7 @@ class FakeExportDatabase:
             },
             {
                 "id": 2,
+                "export_date": work_date,
                 "work_date": work_date,
                 "staff_name": "Brian",
                 "site": "新村",
@@ -57,6 +59,7 @@ class FakeExportDatabase:
         reminders = [
             {
                 "id": 1,
+                "export_date": work_date,
                 "work_date": work_date,
                 "site": "新村",
                 "staff_name": "Brian",
@@ -90,9 +93,13 @@ class LocalExportTests(unittest.TestCase):
 
             with ZipFile(total_path) as workbook:
                 workbook_xml = workbook.read("xl/workbook.xml").decode("utf-8")
+                sheet_xml = workbook.read("xl/worksheets/sheet1.xml").decode("utf-8")
             self.assertIn("维修记录", workbook_xml)
             self.assertIn("附件检查", workbook_xml)
             self.assertIn("提醒记录", workbook_xml)
+            self.assertIn("归档日期", sheet_xml)
+            self.assertIn("实际工作日期", sheet_xml)
+            self.assertIn("备注", sheet_xml)
 
 
 if __name__ == "__main__":

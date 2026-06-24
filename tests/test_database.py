@@ -259,6 +259,25 @@ class DatabaseTests(unittest.TestCase):
             self.assertEqual(db.resolve_staff_name("強"), "Brian 強")
             self.assertEqual(db.resolve_staff_name("unknown"), "unknown")
 
+    def test_site_config_aliases_are_matched_and_normalized(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db = Database(Path(temp_dir) / "test.db")
+            db.init()
+            site_id = db.upsert_site_config(
+                {
+                    "name": "LPP",
+                    "aliases": ["LPP Free Access", "L212D", "L322"],
+                    "notes": "LPP 内部门点",
+                    "is_active": True,
+                }
+            )
+
+            self.assertGreater(site_id, 0)
+            self.assertEqual(db.resolve_site_name("L212D"), "LPP")
+            self.assertEqual(db.match_site_in_text("L322 Project Room red light")["name"], "LPP")
+            self.assertTrue(db.set_site_active(site_id, False))
+            self.assertIsNone(db.match_site_in_text("L322 Project Room red light"))
+
     def test_init_repairs_reminders_foreign_key_to_old_repair_table(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             db = Database(Path(temp_dir) / "test.db")

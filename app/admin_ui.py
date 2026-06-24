@@ -201,6 +201,44 @@ def admin_settings_html() -> str:
     </section>
 
     <section>
+      <h2>地点词库</h2>
+      <form id="siteForm">
+        <input type="hidden" id="siteId">
+        <div class="grid">
+          <label>地点名称
+            <input id="siteName" required placeholder="例如 LPP">
+          </label>
+          <label>别名/关键词，用逗号分隔
+            <input id="siteAliases" placeholder="例如 LPP Free Access, L212D, L322">
+          </label>
+          <label>说明
+            <input id="siteNotes" placeholder="例如 LPP 内不同房间/门点">
+          </label>
+        </div>
+        <label class="role" style="width:max-content;margin-top:10px;">
+          <input id="siteIsActive" type="checkbox" checked> 启用
+        </label>
+        <div class="actions" style="margin-top:12px;">
+          <button type="submit">保存地点</button>
+          <button type="button" class="secondary" id="clearSiteFormBtn">清空</button>
+        </div>
+      </form>
+      <div class="status" id="siteStatus"></div>
+      <table>
+        <thead>
+          <tr>
+            <th>地点名称</th>
+            <th>别名/关键词</th>
+            <th>状态</th>
+            <th>说明</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="siteRows"></tbody>
+      </table>
+    </section>
+
+    <section>
       <h2>处理原则</h2>
       <div class="grid">
         <label>正式任务来源原则
@@ -253,6 +291,7 @@ def admin_settings_html() -> str:
       ["viewer", "管理查看"]
     ];
     let staff = [];
+    let sites = [];
     let issues = [];
 
     function $(id) { return document.getElementById(id); }
@@ -302,6 +341,20 @@ def admin_settings_html() -> str:
         </tr>
       `).join("");
     }
+    function renderSiteRows() {
+      $("siteRows").innerHTML = sites.map(item => `
+        <tr>
+          <td>${item.name}</td>
+          <td>${(item.aliases || []).map(value => `<span class="pill">${value}</span>`).join("") || '<span class="muted">未设置</span>'}</td>
+          <td>${item.is_active ? "启用" : "停用"}</td>
+          <td>${item.notes || ""}</td>
+          <td class="actions">
+            <button class="secondary" type="button" onclick="editSite(${item.id})">编辑</button>
+            <button class="danger" type="button" onclick="toggleSite(${item.id}, ${!item.is_active})">${item.is_active ? "停用" : "启用"}</button>
+          </td>
+        </tr>
+      `).join("") || '<tr><td colspan="5" class="muted">暂无地点配置</td></tr>';
+    }
     function renderIssueRows() {
       $("issueRows").innerHTML = issues.map(item => `
         <tr>
@@ -330,6 +383,11 @@ def admin_settings_html() -> str:
       $("isActive").checked = true;
       renderRoleInputs([]);
     }
+    function clearSiteForm() {
+      $("siteForm").reset();
+      $("siteId").value = "";
+      $("siteIsActive").checked = true;
+    }
     window.editStaff = function(id) {
       const item = staff.find(row => row.id === id);
       if (!item) return;
@@ -353,6 +411,27 @@ def admin_settings_html() -> str:
         await loadStaff();
       } catch (error) {
         setStatus("staffStatus", error.message, true);
+      }
+    };
+    window.editSite = function(id) {
+      const item = sites.find(row => row.id === id);
+      if (!item) return;
+      $("siteId").value = item.id;
+      $("siteName").value = item.name || "";
+      $("siteAliases").value = (item.aliases || []).join(", ");
+      $("siteNotes").value = item.notes || "";
+      $("siteIsActive").checked = Boolean(item.is_active);
+      $("siteName").focus();
+    };
+    window.toggleSite = async function(id, isActive) {
+      try {
+        await api(`/api/admin/sites/${id}/active`, {
+          method: "PATCH",
+          body: JSON.stringify({ is_active: isActive })
+        });
+        await loadSites();
+      } catch (error) {
+        setStatus("siteStatus", error.message, true);
       }
     };
     window.convertIssue = async function(id) {
@@ -415,6 +494,11 @@ def admin_settings_html() -> str:
       staff = data.staff;
       renderStaffRows();
     }
+    async function loadSites() {
+      const data = await api("/api/admin/sites");
+      sites = data.sites;
+      renderSiteRows();
+    }
     async function loadIssues() {
       const data = await api("/api/issues?status=pending&limit=50");
       issues = data.issues;
@@ -432,7 +516,7 @@ def admin_settings_html() -> str:
       setStatus("staffStatus", "");
       setStatus("principlesStatus", "");
       setStatus("issuesStatus", "");
-      await Promise.all([loadStaff(), loadPrinciples(), loadIssues()]);
+      await Promise.all([loadStaff(), loadSites(), loadPrinciples(), loadIssues()]);
     }
     $("staffForm").addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -477,7 +561,28 @@ def admin_settings_html() -> str:
         setStatus("principlesStatus", error.message, true);
       }
     });
+    $("siteForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      try {
+        await api("/api/admin/sites", {
+          method: "POST",
+          body: JSON.stringify({
+            id: $("siteId").value ? Number($("siteId").value) : null,
+            name: $("siteName").value,
+            aliases: $("siteAliases").value,
+            notes: $("siteNotes").value,
+            is_active: $("siteIsActive").checked
+          })
+        });
+        clearSiteForm();
+        await loadSites();
+        setStatus("siteStatus", "已保存地点词库");
+      } catch (error) {
+        setStatus("siteStatus", error.message, true);
+      }
+    });
     $("clearFormBtn").addEventListener("click", clearForm);
+    $("clearSiteFormBtn").addEventListener("click", clearSiteForm);
     $("refreshBtn").addEventListener("click", refreshAll);
     $("loadIssuesBtn").addEventListener("click", loadIssues);
     renderRoleInputs([]);

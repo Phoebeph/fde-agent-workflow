@@ -229,6 +229,35 @@ class StaffActiveIn(BaseModel):
     is_active: bool
 
 
+class SiteConfigIn(BaseModel):
+    id: int | None = Field(default=None, ge=1)
+    name: str = Field(min_length=1)
+    aliases: list[str] = Field(default_factory=list)
+    notes: str = ""
+    is_active: bool = True
+
+    @field_validator("name")
+    @classmethod
+    def strip_site_name(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("name cannot be blank")
+        return stripped
+
+    @field_validator("aliases", mode="before")
+    @classmethod
+    def normalize_site_aliases(cls, value: Any) -> list[str]:
+        if isinstance(value, str):
+            return [item.strip() for item in value.split(",") if item.strip()]
+        if isinstance(value, list):
+            return [str(item).strip() for item in value if str(item).strip()]
+        return []
+
+
+class SiteActiveIn(BaseModel):
+    is_active: bool
+
+
 class SystemPrinciplesIn(BaseModel):
     principles: dict[str, Any] = Field(default_factory=dict)
 

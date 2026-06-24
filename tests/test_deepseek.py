@@ -1,6 +1,11 @@
 import unittest
 
-from app.services.deepseek import normalize_analysis, normalize_analysis_items, split_work_item_text
+from app.services.deepseek import (
+    infer_work_date_from_text,
+    normalize_analysis,
+    normalize_analysis_items,
+    split_work_item_text,
+)
 
 
 class DeepSeekNormalizeTests(unittest.TestCase):
@@ -67,8 +72,8 @@ class DeepSeekNormalizeTests(unittest.TestCase):
         )
 
         self.assertEqual(checklist_items, [
-            "海明例檢完成，Checklist已簽",
-            "海灣例檢完成，5月checklist已交俾工程部",
+            "17/6 海明例檢完成，Checklist已簽",
+            "18/6 海灣例檢完成，5月checklist已交俾工程部",
         ])
         self.assertEqual(len(weather_items), 2)
         self.assertIn("因天雨關係", weather_items[1])
@@ -133,6 +138,12 @@ class DeepSeekNormalizeTests(unittest.TestCase):
 
         self.assertEqual(len(items), 3)
         self.assertIn("Mon3", items[2]["summary"])
+
+    def test_infer_work_date_from_text_uses_message_year(self) -> None:
+        self.assertEqual(
+            infer_work_date_from_text("17/6 LPP 例檢完成", "2026-06-20"),
+            "2026-06-17",
+        )
 
 
 if __name__ == "__main__":

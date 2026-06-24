@@ -20,6 +20,8 @@ from app.schemas import (
     ReminderResultIn,
     RuleImportIn,
     ScheduleImportIn,
+    SiteActiveIn,
+    SiteConfigIn,
     StaffActiveIn,
     StaffConfigIn,
     SystemPrinciplesIn,
@@ -27,8 +29,8 @@ from app.schemas import (
 )
 from app.services.archive import archive_attachment
 from app.services.completion import apply_schedule_completion, schedule_gap_analysis
-from app.services.diagnostics import build_location_coverage_report
-from app.services.deepseek import DeepSeekClient, DeepSeekError
+from app.services.diagnostics import build_location_coverage_report, infer_location_from_item
+from app.services.deepseek import DeepSeekClient, DeepSeekError, rule_based_analysis, split_work_item_text
 from app.services.dispatch import discover_dispatch_schedules, followup_tracking_to_event
 from app.services.feishu import FeishuClient, FeishuError
 from app.services.fingerprint import message_fingerprint
@@ -110,6 +112,64 @@ def _apply_staff_mapping(analysis: dict[str, object], message: dict[str, object]
     return mapped
 
 
+def _apply_site_mapping(analysis: dict[str, object], message: dict[str, object]) -> dict[str, object]:
+    mapped = dict(analysis)
+    current_site = str(mapped.get("site") or "").strip()
+    if current_site:
+        mapped["site"] = db.resolve_site_name(current_site)
+        return mapped
+    search_text = "\n".join(
+        str(value or "")
+        for value in (
+            mapped.get("summary"),
+            mapped.get("result"),
+            message.get("text"),
+        )
+    )
+    matched = db.match_site_in_text(search_text)
+    if matched:
+        mapped["site"] = matched["name"]
+    return mapped
+
+
+def _augment_analyses_with_configured_sites(
+    analyses: list[dict[str, object]],
+    message: dict[str, object],
+    attachments: list[dict[str, object]],
+    rules: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    augmented = list(analyses)
+    existing_text = "\n".join(
+        str(item.get("site") or "") + " " + str(item.get("summary") or "")
+        for item in augmented
+    ).casefold()
+    for chunk in split_work_item_text(str(message.get("text") or "")):
+        matched = db.match_site_in_text(chunk)
+        if not matched:
+            inferred = infer_location_from_item(chunk)
+            matched = db.match_site_in_text(inferred)
+        if not matched:
+            continue
+        site_name = str(matched["name"])
+        if site_name.casefold() in existing_text and str(chunk[:24]).casefold() in existing_text:
+            continue
+        if site_name.casefold() in existing_text and _chunk_substance_is_covered(chunk, existing_text):
+            continue
+        item_message = dict(message)
+        item_message["text"] = chunk
+        analysis = rule_based_analysis(item_message, attachments, rules)
+        analysis["site"] = site_name
+        augmented.append(analysis)
+        existing_text += "\n" + site_name.casefold() + " " + str(analysis.get("summary") or "").casefold()
+    return augmented
+
+
+def _chunk_substance_is_covered(chunk: str, existing_text: str) -> bool:
+    tokens = [part.casefold() for part in str(chunk).replace("/", " ").split() if len(part) >= 3]
+    useful = [token for token in tokens if token not in {"the", "and", "正常", "完成"}]
+    return bool(useful) and any(token in existing_text for token in useful)
+
+
 def _ensure_local_directories() -> None:
     settings.database_path.parent.mkdir(parents=True, exist_ok=True)
     for path in (
@@ -154,10 +214,12 @@ def _analyze_messages(messages: list[dict[str, object]], sync_feishu: bool) -> d
                 attachments=attachments,
                 rules=rules,
             )
+            analyses = _augment_analyses_with_configured_sites(analyses, message, attachments, rules)
             schedules = db.list_schedules_for_message(message)
             first_feishu_record_id = None
             for item_index, raw_analysis in enumerate(analyses):
                 raw_analysis = _apply_staff_mapping(raw_analysis, message)
+                raw_analysis = _apply_site_mapping(raw_analysis, message)
                 analysis = apply_schedule_completion(
                     analysis=raw_analysis,
                     message=message,
@@ -601,6 +663,25 @@ def admin_set_staff_active(staff_id: int, payload: StaffActiveIn) -> dict[str, o
     updated = db.set_staff_active(staff_id, payload.is_active)
     if not updated:
         raise HTTPException(status_code=404, detail="staff not found")
+    return {"ok": True}
+
+
+@app.get("/api/admin/sites")
+def admin_list_sites() -> dict[str, object]:
+    return {"sites": db.list_site_configs()}
+
+
+@app.post("/api/admin/sites")
+def admin_save_site(payload: SiteConfigIn) -> dict[str, object]:
+    site_id = db.upsert_site_config(payload.model_dump())
+    return {"ok": True, "id": site_id}
+
+
+@app.patch("/api/admin/sites/{site_id}/active")
+def admin_set_site_active(site_id: int, payload: SiteActiveIn) -> dict[str, object]:
+    updated = db.set_site_active(site_id, payload.is_active)
+    if not updated:
+        raise HTTPException(status_code=404, detail="site not found")
     return {"ok": True}
 
 

@@ -79,7 +79,9 @@ def _write_export_workbook(
 def _repair_rows(records: list[dict[str, Any]]) -> list[list[Any]]:
     rows: list[list[Any]] = [[
         "维修记录ID",
-        "日期",
+        "归档日期",
+        "实际工作日期",
+        "备注",
         "同事",
         "地点",
         "工作类型",
@@ -93,9 +95,13 @@ def _repair_rows(records: list[dict[str, Any]]) -> list[list[Any]]:
         "WhatsApp原文",
     ]]
     for record in records:
+        export_date = record.get("export_date") or record.get("work_date", "")
+        actual_date = record.get("work_date", "")
         rows.append([
             record.get("id", ""),
-            record.get("work_date", ""),
+            export_date,
+            actual_date,
+            _date_note(str(export_date or ""), str(actual_date or "")),
             record.get("staff_name", ""),
             record.get("site", ""),
             record.get("work_type", ""),
@@ -114,7 +120,8 @@ def _repair_rows(records: list[dict[str, Any]]) -> list[list[Any]]:
 def _attachment_rows(records: list[dict[str, Any]]) -> list[list[Any]]:
     rows: list[list[Any]] = [[
         "维修记录ID",
-        "日期",
+        "归档日期",
+        "实际工作日期",
         "地点",
         "同事",
         "是否需要照片",
@@ -124,10 +131,12 @@ def _attachment_rows(records: list[dict[str, Any]]) -> list[list[Any]]:
         "缺失资料",
     ]]
     for record in records:
+        export_date = record.get("export_date") or record.get("work_date", "")
         missing_items = record.get("missing_items", [])
         attachments = record.get("attachments", [])
         rows.append([
             record.get("id", ""),
+            export_date,
             record.get("work_date", ""),
             record.get("site", ""),
             record.get("staff_name", ""),
@@ -143,7 +152,8 @@ def _attachment_rows(records: list[dict[str, Any]]) -> list[list[Any]]:
 def _reminder_rows(reminders: list[dict[str, Any]]) -> list[list[Any]]:
     rows: list[list[Any]] = [[
         "提醒ID",
-        "日期",
+        "归档日期",
+        "实际工作日期",
         "地点",
         "同事",
         "提醒对象",
@@ -155,8 +165,10 @@ def _reminder_rows(reminders: list[dict[str, Any]]) -> list[list[Any]]:
         "关联维修摘要",
     ]]
     for reminder in reminders:
+        export_date = reminder.get("export_date") or reminder.get("work_date", "")
         rows.append([
             reminder.get("id", ""),
+            export_date,
             reminder.get("work_date", ""),
             reminder.get("site", ""),
             reminder.get("staff_name", ""),
@@ -169,6 +181,12 @@ def _reminder_rows(reminders: list[dict[str, Any]]) -> list[list[Any]]:
             reminder.get("summary", ""),
         ])
     return rows
+
+
+def _date_note(export_date: str, actual_date: str) -> str:
+    if export_date and actual_date and export_date != actual_date:
+        return f"{export_date} 记录的其他日期工作：实际工作日期 {actual_date}"
+    return ""
 
 
 def _needs_photo(record: dict[str, Any]) -> bool:
