@@ -902,14 +902,25 @@ def ingest_whatsapp_messages(
                 "message_fingerprint": fingerprint,
             }
         )
+    existing_messages = db.list_messages_by_fingerprints(fingerprints)
+    existing_fingerprints = {
+        str(message.get("message_fingerprint") or "")
+        for message in existing_messages
+    }
+    new_fingerprints = [
+        fingerprint
+        for fingerprint in fingerprints
+        if fingerprint not in existing_fingerprints
+    ]
+
     insert_result = db.insert_messages(rows)
     insert_result["filtered"] = filtered
-    stored_messages = db.list_messages_by_fingerprints(fingerprints)
-    dispatch_result = _discover_and_save_dispatch_schedules(stored_messages)
-    auto_pipeline = {"scheduled": False, "reason": "no stored messages"}
-    if stored_messages:
+    new_messages = db.list_messages_by_fingerprints(new_fingerprints)
+    dispatch_result = _discover_and_save_dispatch_schedules(new_messages)
+    auto_pipeline = {"scheduled": False, "reason": "no newly inserted messages"}
+    if new_messages:
         auto_pipeline = _schedule_post_ingest_pipeline(
-            fingerprints=fingerprints,
+            fingerprints=new_fingerprints,
             background_tasks=background_tasks,
         )
     return {
