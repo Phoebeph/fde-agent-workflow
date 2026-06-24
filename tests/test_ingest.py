@@ -9,9 +9,12 @@ class FakeDatabase:
     def __init__(self) -> None:
         self.inserted_rows = []
         self.fingerprints = []
+        self.insert_result = None
 
     def insert_messages(self, rows):
         self.inserted_rows = rows
+        if self.insert_result is not None:
+            return self.insert_result
         return {"inserted": len(rows), "skipped": 0}
 
     def list_messages_by_fingerprints(self, fingerprints):
@@ -57,6 +60,35 @@ class IngestTests(unittest.TestCase):
         self.assertEqual(fake_db.inserted_rows[0]["text"], "英皇道 8樓12v火牛 換前")
         self.assertEqual(fake_db.inserted_rows[0]["sent_at"], "2026-06-18T10:51:00+08:00")
         self.assertEqual(len(fake_db.fingerprints), 1)
+
+    def test_ingest_schedules_pipeline_for_existing_messages(self) -> None:
+        fake_db = FakeDatabase()
+        fake_db.insert_result = {"inserted": 0, "skipped": 1}
+        payload = WhatsAppMessageBatchIn.model_validate(
+            {
+                "messages": [
+                    {
+                        "发送者": "aaa",
+                        "消息内容": "The SOUI Tv wall 正常",
+                        "时间": "24/6/2026 上午10:51",
+                    },
+                ]
+            }
+        )
+
+        with (
+            patch("app.main.db", fake_db),
+            patch("app.main._discover_and_save_dispatch_schedules", return_value={"created": 0}),
+            patch(
+                "app.main._schedule_post_ingest_pipeline",
+                return_value={"scheduled": True, "background": True, "message_count": 1},
+            ) as schedule_pipeline,
+        ):
+            result = ingest_whatsapp_messages(payload, background_tasks=object())
+
+        self.assertEqual(result["messages"], {"inserted": 0, "skipped": 1, "filtered": 0})
+        self.assertTrue(result["auto_pipeline"]["scheduled"])
+        schedule_pipeline.assert_called_once()
 
 
 if __name__ == "__main__":
