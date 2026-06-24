@@ -37,6 +37,10 @@ C:\Users\test\data\
 ```text
 DATA_ROOT=C:\Users\test\data
 FEISHU_MOCK_MODE=true
+AUTO_ANALYZE_ON_INGEST=true
+AUTO_EXPORT_ON_INGEST=true
+AUTO_PIPELINE_BACKGROUND=true
+AUTO_SYNC_FEISHU_ON_INGEST=false
 ```
 
 如果只配置 `DATA_ROOT`，后端会自动使用：
@@ -53,6 +57,13 @@ BACKUPS_ROOT=C:\Users\test\data\backups
 后端启动时会自动创建这些目录，客户电脑不需要手工逐个建立目录。
 
 即使不使用飞书，`FEISHU_MOCK_MODE=true` 仍可作为本地分析结果表使用，方便通过 `/api/mock/feishu/records` 查看 AI 输出。
+
+自动流程开关说明：
+
+- `AUTO_ANALYZE_ON_INGEST=true`：影刀成功提交 WhatsApp 消息后，后端自动分析新消息。
+- `AUTO_EXPORT_ON_INGEST=true`：分析完成后，后端自动生成当天 Excel。
+- `AUTO_PIPELINE_BACKGROUND=true`：自动分析在后台执行，避免影刀等待 DeepSeek 返回太久。
+- `AUTO_SYNC_FEISHU_ON_INGEST=false`：本地部署不写飞书；后续重新接飞书时再改为 `true`。
 
 ## 本地数据分工
 
@@ -139,15 +150,22 @@ POST /api/whatsapp/messages
 }
 ```
 
-### 2. AI 分析
+### 2. 自动 AI 分析和导出
 
-调用：
+影刀成功调用 `POST /api/whatsapp/messages` 后，后端会自动：
+
+1. 识别派工/跟进类消息并保存排班。
+2. 分析新收到的维修汇报消息，生成本地 `repair_records`。
+3. 按 WhatsApp 消息发送日期自动生成当天综合 Excel 和各地点 Excel。
+
+例如 `Checklist已签` 不会单独成行，而是并入对应例检记录。
+
+如果需要排错或重跑，仍可手动调用：
 
 ```http
 POST /api/analyze/run
+POST /api/exports/daily?work_date=2026-06-19
 ```
-
-后端会生成本地 `repair_records`，并把补充句合并到对应维修事项。例如 `Checklist已签` 不会单独成行，而是并入对应例检记录。
 
 ### 3. 下载附件
 
@@ -165,6 +183,8 @@ POST /api/whatsapp/attachments
 
 如果影刀没有传 `site/staff_name/work_type/work_date`，后端会尝试使用已分析出的维修记录字段自动命名归档文件。
 
+附件回传成功后，后端会把对应 WhatsApp 消息标记为重新分析，并自动更新当天 Excel，使 `附件检查` sheet 里显示最新归档路径。
+
 附件正式归档目录为：
 
 ```text
@@ -177,15 +197,9 @@ DATA_ROOT\年\月\日\地点\
 C:\Users\test\data\2026\06\19\The_SOUI\2026-06-19_The_SOUI_num5_maintenance_image_xxxxx.jpg
 ```
 
-### 4. 导出每日 Excel
+### 4. 查看每日 Excel
 
-当天分析和附件回传后，调用：
-
-```http
-POST /api/exports/daily?work_date=2026-06-19
-```
-
-后端会生成：
+消息分析完成、附件回传完成后，后端会自动生成或更新：
 
 ```text
 C:\Users\test\data\2026\06\19\2026-06-19_维修与提醒总表.xlsx

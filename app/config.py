@@ -85,6 +85,10 @@ class Settings:
 
     whatsapp_group_name: str = os.getenv("WHATSAPP_GROUP_NAME", "")
     reminder_daily_limit: int = _int_env("REMINDER_DAILY_LIMIT", 1)
+    auto_analyze_on_ingest: bool = _bool_env("AUTO_ANALYZE_ON_INGEST", True)
+    auto_export_on_ingest: bool = _bool_env("AUTO_EXPORT_ON_INGEST", True)
+    auto_pipeline_background: bool = _bool_env("AUTO_PIPELINE_BACKGROUND", True)
+    auto_sync_feishu_on_ingest: bool = _bool_env("AUTO_SYNC_FEISHU_ON_INGEST", False)
     dispatch_manager_senders: tuple[str, ...] = _csv_env(
         "DISPATCH_MANAGER_SENDERS",
         ("Dicky Company", "Rex Atl", "Ono atl"),

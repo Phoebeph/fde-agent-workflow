@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
+import threading
 import uuid
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
 from fastapi.responses import HTMLResponse
 
 from app.admin_ui import admin_settings_html
@@ -42,6 +43,7 @@ from app.services.rules import load_rules_from_xlsx
 app = FastAPI(title="WhatsApp Repair AI Backend", version="0.1.0")
 db = Database(settings.database_path)
 DOWNLOADS_DIR = settings.downloads_root
+AUTO_PIPELINE_LOCK = threading.Lock()
 AUTOMATION_NOTICE_MARKERS = ("自动化助手提示",)
 ATTACHMENT_LABEL_TEXTS = {
     "前",
@@ -290,6 +292,132 @@ def _analyze_messages(messages: list[dict[str, object]], sync_feishu: bool) -> d
 
 def _analyze_pending_messages(limit: int, sync_feishu: bool) -> dict[str, object]:
     return _analyze_messages(db.list_pending_messages(limit), sync_feishu)
+
+
+def _message_sent_dates(messages: list[dict[str, object]]) -> list[str]:
+    dates = {
+        str(message.get("sent_at") or "")[:10]
+        for message in messages
+        if len(str(message.get("sent_at") or "")) >= 10
+    }
+    return sorted(date for date in dates if date)
+
+
+def _export_daily_workbooks_for_messages(messages: list[dict[str, object]]) -> list[dict[str, object]]:
+    exports: list[dict[str, object]] = []
+    if not settings.auto_export_on_ingest:
+        return exports
+    for work_date in _message_sent_dates(messages):
+        result = export_daily_workbook(
+            db=db,
+            work_date=work_date,
+            export_root=settings.exports_root,
+        )
+        exports.append(
+            {
+                "work_date": work_date,
+                "total_path": result.total_path,
+                "site_paths": result.site_paths,
+                "site_count": len(result.site_paths),
+            }
+        )
+    return exports
+
+
+def _run_post_ingest_pipeline(fingerprints: list[str]) -> dict[str, object]:
+    run_id = f"run_{uuid.uuid4().hex[:16]}"
+    unique_fingerprints = list(dict.fromkeys(fingerprints))
+    if not unique_fingerprints:
+        return {
+            "ok": True,
+            "run_id": run_id,
+            "processed": 0,
+            "analyzed": 0,
+            "exports": [],
+        }
+
+    with AUTO_PIPELINE_LOCK:
+        messages = db.list_messages_by_fingerprints(unique_fingerprints)
+        pending_messages = [
+            message
+            for message in messages
+            if str(message.get("analysis_status") or "pending") in {"pending", "retry"}
+        ]
+        try:
+            analysis_result = _analyze_messages(
+                pending_messages,
+                sync_feishu=settings.auto_sync_feishu_on_ingest,
+            )
+            refreshed_messages = db.list_messages_by_fingerprints(unique_fingerprints)
+            exports = _export_daily_workbooks_for_messages(refreshed_messages)
+            status = "success" if analysis_result.get("failed", 0) == 0 else "failed"
+            db.save_run_record(
+                {
+                    "run_id": run_id,
+                    "run_type": "auto_ingest_pipeline",
+                    "status": status,
+                    "message_summary": (
+                        f"影刀入库自动处理：消息 {len(messages)} 条，"
+                        f"分析 {analysis_result.get('analyzed', 0)} 条，"
+                        f"导出 {len(exports)} 个日期"
+                    ),
+                    "inserted_count": len(messages),
+                    "analyzed_count": analysis_result.get("analyzed", 0),
+                    "feishu_synced_count": analysis_result.get("feishu_synced", 0),
+                    "reminders_created": analysis_result.get("reminders_created", 0),
+                    "error_summary": analysis_result.get("first_error"),
+                }
+            )
+            return {
+                "ok": status == "success",
+                "run_id": run_id,
+                "messages": len(messages),
+                "pending_messages": len(pending_messages),
+                "analysis": analysis_result,
+                "exports": exports,
+            }
+        except Exception as exc:
+            db.save_run_record(
+                {
+                    "run_id": run_id,
+                    "run_type": "auto_ingest_pipeline",
+                    "status": "failed",
+                    "message_summary": f"影刀入库自动处理失败：消息 {len(messages)} 条",
+                    "inserted_count": len(messages),
+                    "error_summary": str(exc)[:240],
+                }
+            )
+            return {
+                "ok": False,
+                "run_id": run_id,
+                "messages": len(messages),
+                "pending_messages": len(pending_messages),
+                "analysis": {"failed": len(pending_messages), "first_error": str(exc)},
+                "exports": [],
+            }
+
+
+def _schedule_post_ingest_pipeline(
+    *,
+    fingerprints: list[str],
+    background_tasks: BackgroundTasks | None,
+) -> dict[str, object]:
+    if not settings.auto_analyze_on_ingest:
+        return {"scheduled": False, "reason": "AUTO_ANALYZE_ON_INGEST is disabled"}
+    unique_fingerprints = list(dict.fromkeys(fingerprints))
+    if not unique_fingerprints:
+        return {"scheduled": False, "reason": "no messages to analyze"}
+    if background_tasks is None:
+        return {"scheduled": False, "reason": "no background task runner"}
+    if background_tasks is not None and settings.auto_pipeline_background:
+        background_tasks.add_task(_run_post_ingest_pipeline, unique_fingerprints)
+        return {
+            "scheduled": True,
+            "background": True,
+            "message_count": len(unique_fingerprints),
+        }
+    result = _run_post_ingest_pipeline(unique_fingerprints)
+    return {"scheduled": True, "background": False, "result": result}
 
 
 def _role_senders(role: str, fallback: tuple[str, ...]) -> tuple[str, ...]:
@@ -741,8 +869,10 @@ def close_issue(issue_id: int, payload: IssueDecisionIn) -> dict[str, object]:
     return {"ok": True}
 
 
-@app.post("/api/whatsapp/messages")
-def ingest_whatsapp_messages(payload: WhatsAppMessageBatchIn) -> dict[str, object]:
+def ingest_whatsapp_messages(
+    payload: WhatsAppMessageBatchIn,
+    background_tasks: BackgroundTasks | None = None,
+) -> dict[str, object]:
     rows = []
     fingerprints = []
     filtered = 0
@@ -776,7 +906,25 @@ def ingest_whatsapp_messages(payload: WhatsAppMessageBatchIn) -> dict[str, objec
     insert_result["filtered"] = filtered
     stored_messages = db.list_messages_by_fingerprints(fingerprints)
     dispatch_result = _discover_and_save_dispatch_schedules(stored_messages)
-    return {"messages": insert_result, "dispatch_schedules": dispatch_result}
+    auto_pipeline = {"scheduled": False, "reason": "no newly inserted messages"}
+    if insert_result["inserted"]:
+        auto_pipeline = _schedule_post_ingest_pipeline(
+            fingerprints=fingerprints,
+            background_tasks=background_tasks,
+        )
+    return {
+        "messages": insert_result,
+        "dispatch_schedules": dispatch_result,
+        "auto_pipeline": auto_pipeline,
+    }
+
+
+@app.post("/api/whatsapp/messages")
+def ingest_whatsapp_messages_route(
+    payload: WhatsAppMessageBatchIn,
+    background_tasks: BackgroundTasks,
+) -> dict[str, object]:
+    return ingest_whatsapp_messages(payload, background_tasks)
 
 
 @app.post("/api/mock/whatsapp/message")
@@ -924,7 +1072,10 @@ def recent_task_events(limit: int = Query(default=50, ge=1, le=200)) -> dict[str
 
 
 @app.post("/api/whatsapp/attachments")
-def ingest_attachment(payload: AttachmentIn) -> dict[str, object]:
+def ingest_attachment(
+    payload: AttachmentIn,
+    background_tasks: BackgroundTasks,
+) -> dict[str, object]:
     message = db.get_message_by_fingerprint(payload.message_fingerprint)
     if not message:
         raise HTTPException(status_code=404, detail="message_fingerprint not found")
@@ -960,11 +1111,19 @@ def ingest_attachment(payload: AttachmentIn) -> dict[str, object]:
             "size_bytes": archived.size_bytes,
         }
     )
+    auto_pipeline = {"scheduled": False, "reason": "attachment was already archived"}
+    if inserted:
+        db.mark_message_retry(message["id"])
+        auto_pipeline = _schedule_post_ingest_pipeline(
+            fingerprints=[payload.message_fingerprint],
+            background_tasks=background_tasks,
+        )
     return {
         "inserted": inserted,
         "archive_path": archived.archive_path,
         "archive_filename": archived.archive_filename,
         "sha256": archived.sha256,
+        "auto_pipeline": auto_pipeline,
     }
 
 
