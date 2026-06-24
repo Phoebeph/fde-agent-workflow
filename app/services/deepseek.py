@@ -162,10 +162,30 @@ def rule_based_analysis(
     elif "call" in lower:
         work_type = "ad-hoc"
 
-    if any(word in text for word in ["更換", "更换", "壞", "坏", "維修", "维修"]):
+    needs_quote_photo = ("報價" in text or "报价" in text) and any(
+        word in text for word in ["損壞", "损坏", "壞", "坏", "故障", "維修", "维修", "更換", "更换", "設備", "设备"]
+    )
+    needs_atal_photos = (
+        "atal" in lower
+        and any(word in text for word in ["安裝", "安装", "加裝", "加装", "更換", "更换", "換", "换"])
+        and any(word in text for word in ["物料", "材料", "配件", "設備", "设备", "提供"])
+    )
+    needs_delivery_photo = any(word in text for word in ["送貨", "送货", "交貨", "交货", "簽收", "签收"])
+    needs_hkis_logbook = "hkis" in lower and any(word in text for word in ["大潭", "淺水灣", "浅水湾", "Repulse Bay", "Tai Tam"])
+    if needs_atal_photos:
+        if sum(1 for value in attachment_types if value == "image") < 3:
+            missing_items.append("更换前/更换中/更换后照片")
+        if "pdf" not in attachment_types:
+            missing_items.append("维修报告 PDF")
+    elif needs_quote_photo or needs_delivery_photo:
         if "image" not in attachment_types:
-            missing_items.append("照片记录")
-    if any(word in lower for word in ["report", "pdf"]) and "pdf" not in attachment_types:
+            missing_items.append("送货照片" if needs_delivery_photo else "照片记录")
+    elif needs_hkis_logbook and "image" not in attachment_types:
+        missing_items.append("Logbook照片")
+    if any(word in lower for word in ["ecall", "e-call", "e call"]) and any(word in text for word in ["額外收費", "额外收费", "收費", "收费"]):
+        if "pdf" not in attachment_types:
+            missing_items.append("维修报告 PDF")
+    if any(word in lower for word in ["report", "pdf"]) and any(word in text for word in ["需", "需要", "後補", "后补", "請補", "请补", "有冇"]) and "pdf" not in attachment_types:
         missing_items.append("维修报告 PDF")
     if any(word in text for word in ["待", "未", "下次", "跟進", "跟进", "報價", "报价"]):
         next_actions.append("需要人工确认是否仍有待办")

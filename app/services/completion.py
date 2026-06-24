@@ -11,6 +11,12 @@ FAULT_WORDS = ["坏", "故障", "问题", "维修", "更换", "修复", "无反�
 QUOTE_WORDS = ["报价", "放线", "路线", "平面图", "工程图"]
 DELIVERY_WORDS = ["送货", "交货", "签收"]
 INSPECTION_WORDS = ["例检", "检查", "测试"]
+PHOTO_RECORD_ITEM = "照片记录（Wide Shot 和 Close Up）"
+ATAL_PHOTOS_ITEM = "更换前/更换中/更换后照片"
+DELIVERY_PHOTO_ITEM = "送货照片（Wide Shot 和 Close Up）"
+LOGBOOK_PHOTO_ITEM = "Logbook照片"
+REPORT_PDF_ITEM = "维修报告 PDF"
+ROUTE_PLAN_ITEM = "路线图或平面图"
 
 
 def apply_schedule_completion(
@@ -55,11 +61,13 @@ def apply_schedule_completion(
         _dedupe([to_simplified_text(item) for item in missing_items]),
         message_text,
         attachments,
+        required_items,
     )
     result["next_actions"] = _filter_items_with_evidence(
         _dedupe([to_simplified_text(item) for item in next_actions]),
         message_text,
         attachments,
+        required_items,
     )
 
     if not message_text.strip():
@@ -103,14 +111,23 @@ def match_schedule(message: dict[str, Any], schedules: list[dict[str, Any]]) -> 
 
 
 def required_evidence(schedule_text: str, message_text: str) -> list[str]:
-    combined = f"{schedule_text}\n{message_text}"
+    combined = to_simplified_text(f"{schedule_text}\n{message_text}")
+    lower = combined.lower()
     required = ["工作结果回复"]
-    if any(word in combined for word in FAULT_WORDS):
-        required.extend(["照片记录", "维修报告 PDF"])
+    if _needs_quote_photo(combined):
+        required.append(PHOTO_RECORD_ITEM)
+    if _needs_atal_replacement_evidence(combined):
+        required.extend([ATAL_PHOTOS_ITEM, REPORT_PDF_ITEM])
     if any(word in combined for word in QUOTE_WORDS):
-        required.append("路线图或平面图")
+        if _needs_route_plan(combined):
+            required.append(ROUTE_PLAN_ITEM)
     if any(word in combined for word in DELIVERY_WORDS):
-        required.append("送货照片")
+        required.append(DELIVERY_PHOTO_ITEM)
+    if _needs_hkis_logbook_photo(combined):
+        required.append(LOGBOOK_PHOTO_ITEM)
+    if _needs_ecall_report_pdf(combined, lower):
+        required.append(REPORT_PDF_ITEM)
+    required.extend(_explicit_photo_pdf_requirements(combined, lower))
     return _dedupe(required)
 
 
@@ -121,7 +138,6 @@ def missing_required_items(
 ) -> list[str]:
     text = to_simplified_text(str(message.get("text") or ""))
     attachment_types = {str(item.get("attachment_type") or "") for item in attachments}
-    image_count = sum(1 for item in attachments if str(item.get("attachment_type") or "") == "image")
     hints = message.get("attachment_hints") or []
     hint_labels = " ".join(
         to_simplified_text(str(item.get("label") or item.get("role") or item.get("type") or ""))
@@ -132,14 +148,18 @@ def missing_required_items(
     for item in required_items:
         if item == "工作结果回复" and not has_clear_result(text):
             missing.append("明确工作结果")
-        elif item == "照片记录" and "image" not in attachment_types:
-            missing.append("照片记录")
-        elif item == "维修报告 PDF" and "pdf" not in attachment_types:
-            missing.append("维修报告 PDF")
-        elif item == "路线图或平面图" and not _has_route_evidence(attachment_types, hint_labels, text):
-            missing.append("路线图或平面图")
-        elif item == "送货照片" and "image" not in attachment_types:
-            missing.append("送货照片")
+        elif item == PHOTO_RECORD_ITEM and _image_count(attachments, message) < 2:
+            missing.append(PHOTO_RECORD_ITEM)
+        elif item == ATAL_PHOTOS_ITEM and _image_count(attachments, message) < 3:
+            missing.append(ATAL_PHOTOS_ITEM)
+        elif item == DELIVERY_PHOTO_ITEM and _image_count(attachments, message) < 2:
+            missing.append(DELIVERY_PHOTO_ITEM)
+        elif item == LOGBOOK_PHOTO_ITEM and _image_count(attachments, message) < 1:
+            missing.append(LOGBOOK_PHOTO_ITEM)
+        elif item == REPORT_PDF_ITEM and "pdf" not in attachment_types:
+            missing.append(REPORT_PDF_ITEM)
+        elif item == ROUTE_PLAN_ITEM and not _has_route_evidence(attachment_types, hint_labels, text):
+            missing.append(ROUTE_PLAN_ITEM)
     return missing
 
 
@@ -224,20 +244,93 @@ def _has_route_evidence(attachment_types: set[str], hint_labels: str, text: str)
     return False
 
 
+def _needs_quote_photo(text: str) -> bool:
+    if "报价" not in text:
+        return False
+    return any(word in text for word in ["损坏", "坏", "故障", "维修", "更换", "设备", "物料", "报价"])
+
+
+def _needs_atal_replacement_evidence(text: str) -> bool:
+    has_atal = "atal" in text.lower()
+    has_install_or_replace = any(word in text for word in ["安装", "加装", "更换", "换", "替换"])
+    has_material = any(word in text for word in ["物料", "材料", "配件", "设备", "spare", "提供"])
+    return has_atal and has_install_or_replace and has_material
+
+
+def _needs_route_plan(text: str) -> bool:
+    return any(word in text for word in ["铺设新线", "铺新线", "新线", "放线", "拉线", "走线", "路线", "平面图", "工程图"])
+
+
+def _needs_hkis_logbook_photo(text: str) -> bool:
+    lower = text.lower()
+    has_hkis = "hkis" in lower
+    has_site = any(word in text for word in ["大潭", "浅水湾", "淺水灣", "repulse bay", "tai tam"])
+    return has_hkis and has_site
+
+
+def _needs_ecall_report_pdf(text: str, lower: str) -> bool:
+    has_ecall = "ecall" in lower or "e-call" in lower or "e call" in lower
+    has_charge = any(word in text for word in ["额外收费", "額外收費", "收费", "收費", "charge", "service"])
+    return has_ecall and has_charge
+
+
+def _explicit_photo_pdf_requirements(text: str, lower: str) -> list[str]:
+    explicit_words = ["需要", "需", "要求", "指定", "请补", "請補", "后补", "後補", "有冇", "有没有"]
+    if not any(word in text for word in explicit_words):
+        return []
+    required: list[str] = []
+    if _mentions_photo(text, lower):
+        required.append(PHOTO_RECORD_ITEM)
+    if _mentions_pdf(text, lower):
+        required.append(REPORT_PDF_ITEM)
+    return required
+
+
+def _mentions_photo(text: str, lower: str) -> bool:
+    return any(word in lower for word in ["photo record", "photo"]) or any(
+        word in text for word in ["照片", "相片", "影相", "拍照", "换前", "换中", "换后"]
+    )
+
+
+def _mentions_pdf(text: str, lower: str) -> bool:
+    return "pdf" in lower or any(word in text for word in ["维修报告", "維修報告", "报告扫描", "報告掃描", "扫描"])
+
+
+def _image_count(attachments: list[dict[str, Any]], message: dict[str, Any] | None = None) -> int:
+    count = sum(1 for item in attachments if str(item.get("attachment_type") or "") == "image")
+    if count or not message:
+        return count
+    if message:
+        hints = message.get("attachment_hints") or []
+        count += sum(
+            1
+            for item in hints
+            if isinstance(item, dict) and str(item.get("type") or "").lower() == "image"
+        )
+    return count
+
+
 def _filter_items_with_evidence(
     items: list[str],
     message_text: str,
     attachments: list[dict[str, Any]],
+    required_items: list[str],
 ) -> list[str]:
     attachment_types = {str(item.get("attachment_type") or "") for item in attachments}
     image_count = sum(1 for item in attachments if str(item.get("attachment_type") or "") == "image")
     has_any_attachment = bool(attachment_types)
     result_is_clear = has_clear_result(message_text)
+    required_compact = {to_simplified_text(item).replace(" ", "").lower() for item in required_items}
     filtered = []
     for item in items:
         normalized = to_simplified_text(str(item))
         compact = normalized.replace(" ", "")
+        lower_compact = compact.lower()
         if "ELVGroup" in compact:
+            continue
+        if _is_photo_missing_item(compact, lower_compact) and not _photo_missing_is_required(required_compact):
+            continue
+        if _is_pdf_missing_item(compact, lower_compact) and REPORT_PDF_ITEM.replace(" ", "").lower() not in required_compact:
             continue
         if result_is_clear and any(word in compact for word in ["工作结果", "汇报"]):
             continue
@@ -256,6 +349,27 @@ def _filter_items_with_evidence(
             continue
         filtered.append(normalized)
     return _dedupe(filtered)
+
+
+def _is_photo_missing_item(compact: str, lower_compact: str) -> bool:
+    return (
+        "照片" in compact
+        or "相片" in compact
+        or "photo" in lower_compact
+        or any(word in compact for word in ["换前", "换中", "换后", "送货相"])
+    )
+
+
+def _is_pdf_missing_item(compact: str, lower_compact: str) -> bool:
+    return "pdf" in lower_compact or "维修报告" in compact or "报告扫描" in compact
+
+
+def _photo_missing_is_required(required_compact: set[str]) -> bool:
+    return any(
+        marker in item
+        for item in required_compact
+        for marker in ["照片", "photo", "logbook"]
+    )
 
 
 def _dedupe(items: list[str]) -> list[str]:

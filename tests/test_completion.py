@@ -11,9 +11,9 @@ class CompletionTests(unittest.TestCase):
                 "sender": "Brian",
                 "sent_at": "2026-06-10 11:00",
                 "text": "商场B 门磁坏已更换，测试正常，照片和维修报告 PDF 已上传。",
-                "attachment_hints": [{"type": "image"}, {"type": "pdf"}],
+                "attachment_hints": [{"type": "image"}, {"type": "image"}, {"type": "pdf"}],
             },
-            attachments=[{"attachment_type": "image"}, {"attachment_type": "pdf"}],
+            attachments=[{"attachment_type": "image"}, {"attachment_type": "image"}, {"attachment_type": "pdf"}],
             schedules=[
                 {
                     "id": 1,
@@ -37,9 +37,9 @@ class CompletionTests(unittest.TestCase):
                 "sender": "Casey",
                 "sent_at": "2026-06-10 13:00",
                 "text": "商场C 读卡器无反应已更换火牛，测试正常，维修报告 PDF 后补。",
-                "attachment_hints": [{"type": "image"}],
+                "attachment_hints": [{"type": "image"}, {"type": "image"}],
             },
-            attachments=[{"attachment_type": "image"}],
+            attachments=[{"attachment_type": "image"}, {"attachment_type": "image"}],
             schedules=[
                 {
                     "id": 2,
@@ -101,9 +101,9 @@ class CompletionTests(unittest.TestCase):
                 "sender": "Brian",
                 "sent_at": "2026-06-10 11:00",
                 "text": "商场B 门磁坏已更换，测试正常，工作已完成。照片和维修报告 PDF 已上传。",
-                "attachment_hints": [{"type": "image"}, {"type": "pdf"}],
+                "attachment_hints": [{"type": "image"}, {"type": "image"}, {"type": "pdf"}],
             },
-            attachments=[{"attachment_type": "image"}, {"attachment_type": "pdf"}],
+            attachments=[{"attachment_type": "image"}, {"attachment_type": "image"}, {"attachment_type": "pdf"}],
             schedules=[
                 {
                     "id": 4,
@@ -154,6 +154,150 @@ class CompletionTests(unittest.TestCase):
         self.assertEqual(analysis["missing_items"], [])
         self.assertEqual(analysis["completion_status"], "已完成")
         self.assertEqual(analysis["completion_score"], 100)
+
+    def test_ordinary_replacement_does_not_require_photo_or_pdf(self) -> None:
+        analysis = apply_schedule_completion(
+            analysis={"completion_status": "已完成", "missing_items": [], "next_actions": []},
+            message={
+                "sender": "Brian",
+                "sent_at": "2026-06-10 11:00",
+                "text": "商场B 门磁坏已更换，测试正常。",
+                "attachment_hints": [],
+            },
+            attachments=[],
+            schedules=[
+                {
+                    "id": 7,
+                    "work_date": "2026-06-10",
+                    "staff_name": "Brian",
+                    "site": "商场B",
+                    "task_text": "门磁坏更换维修",
+                }
+            ],
+        )
+
+        self.assertEqual(analysis["missing_items"], [])
+        self.assertEqual(analysis["completion_status"], "已完成")
+
+    def test_quote_work_requires_wide_and_close_up_photo_record(self) -> None:
+        analysis = apply_schedule_completion(
+            analysis={"completion_status": "已完成", "missing_items": [], "next_actions": []},
+            message={
+                "sender": "Casey",
+                "sent_at": "2026-06-10 13:00",
+                "text": "商场C 读卡器损坏，需报价更换，已完成检查。",
+                "attachment_hints": [{"type": "image"}],
+            },
+            attachments=[{"attachment_type": "image"}],
+            schedules=[
+                {
+                    "id": 8,
+                    "work_date": "2026-06-10",
+                    "staff_name": "Casey",
+                    "site": "商场C",
+                    "task_text": "读卡器损坏需要报价更换",
+                }
+            ],
+        )
+
+        self.assertIn("照片记录（Wide Shot 和 Close Up）", analysis["missing_items"])
+
+    def test_atal_material_replacement_requires_three_photos_and_pdf(self) -> None:
+        analysis = apply_schedule_completion(
+            analysis={"completion_status": "已完成", "missing_items": [], "next_actions": []},
+            message={
+                "sender": "Brian",
+                "sent_at": "2026-06-10 11:00",
+                "text": "商场B 更换 ATAL 提供物料，测试正常。",
+                "attachment_hints": [{"type": "image"}, {"type": "image"}],
+            },
+            attachments=[{"attachment_type": "image"}, {"attachment_type": "image"}],
+            schedules=[
+                {
+                    "id": 9,
+                    "work_date": "2026-06-10",
+                    "staff_name": "Brian",
+                    "site": "商场B",
+                    "task_text": "安装或更换由 ATAL 提供的物料",
+                }
+            ],
+        )
+
+        self.assertEqual(analysis["completion_status"], "资料不足")
+        self.assertIn("更换前/更换中/更换后照片", analysis["missing_items"])
+        self.assertIn("维修报告 PDF", analysis["missing_items"])
+
+    def test_delivery_requires_two_delivery_photos(self) -> None:
+        analysis = apply_schedule_completion(
+            analysis={"completion_status": "已完成", "missing_items": [], "next_actions": []},
+            message={
+                "sender": "Brian",
+                "sent_at": "2026-06-10 11:00",
+                "text": "LPP 送货完成，物料已放 control。",
+                "attachment_hints": [],
+            },
+            attachments=[],
+            schedules=[
+                {
+                    "id": 10,
+                    "work_date": "2026-06-10",
+                    "staff_name": "Brian",
+                    "site": "LPP",
+                    "task_text": "Supply and delivery only",
+                }
+            ],
+        )
+
+        self.assertEqual(analysis["completion_status"], "资料不足")
+        self.assertIn("送货照片（Wide Shot 和 Close Up）", analysis["missing_items"])
+
+    def test_hkis_visit_requires_logbook_photo(self) -> None:
+        analysis = apply_schedule_completion(
+            analysis={"completion_status": "已完成", "missing_items": [], "next_actions": []},
+            message={
+                "sender": "Brian",
+                "sent_at": "2026-06-10 11:00",
+                "text": "HKIS 浅水湾 到场检查完成。",
+                "attachment_hints": [],
+            },
+            attachments=[],
+            schedules=[
+                {
+                    "id": 11,
+                    "work_date": "2026-06-10",
+                    "staff_name": "Brian",
+                    "site": "HKIS 浅水湾",
+                    "task_text": "HKIS 浅水湾例检",
+                }
+            ],
+        )
+
+        self.assertEqual(analysis["completion_status"], "资料不足")
+        self.assertIn("Logbook照片", analysis["missing_items"])
+
+    def test_extra_charge_ecall_requires_report_pdf(self) -> None:
+        analysis = apply_schedule_completion(
+            analysis={"completion_status": "已完成", "missing_items": [], "next_actions": []},
+            message={
+                "sender": "Brian",
+                "sent_at": "2026-06-10 11:00",
+                "text": "额外收费 ecall service 维修完成。",
+                "attachment_hints": [],
+            },
+            attachments=[],
+            schedules=[
+                {
+                    "id": 12,
+                    "work_date": "2026-06-10",
+                    "staff_name": "Brian",
+                    "site": "商场B",
+                    "task_text": "额外收费 ecall service 维修",
+                }
+            ],
+        )
+
+        self.assertEqual(analysis["completion_status"], "资料不足")
+        self.assertIn("维修报告 PDF", analysis["missing_items"])
 
     def test_schedule_gap_analysis_marks_unreplied(self) -> None:
         analysis = schedule_gap_analysis(
