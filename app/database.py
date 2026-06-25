@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import uuid
 from contextlib import contextmanager
@@ -231,6 +232,27 @@ CREATE INDEX IF NOT EXISTS idx_issue_records_reported_by ON issue_records(report
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+def _normalized_export_date(sent_at: str, fallback_work_date: str) -> str:
+    raw = sent_at.strip()
+    if len(raw) >= 10 and raw[:4].isdigit() and raw[4] == "-" and raw[7] == "-":
+        return raw[:10]
+    match = re.search(r"(?P<a>\d{1,2})/(?P<b>\d{1,2})/(?P<year>\d{4})", raw)
+    if match:
+        first = int(match.group("a"))
+        second = int(match.group("b"))
+        year = int(match.group("year"))
+        day = first
+        month = second
+        if first <= 12 and second > 12:
+            month = first
+            day = second
+        try:
+            return datetime(year, month, day).strftime("%Y-%m-%d")
+        except ValueError:
+            pass
+    return fallback_work_date[:10] if fallback_work_date else ""
 
 
 def dumps(value: Any) -> str:
@@ -1630,7 +1652,7 @@ class Database:
         return records
 
     def list_export_repair_records(self, work_date: str, site: str | None = None) -> list[dict[str, Any]]:
-        params: list[Any] = [work_date]
+        params: list[Any] = []
         site_filter = ""
         if site:
             site_filter = "AND COALESCE(rr.site, '') = ?"
@@ -1640,7 +1662,7 @@ class Database:
                 f"""
                 SELECT
                     rr.*,
-                    COALESCE(substr(rm.sent_at, 1, 10), rr.work_date) AS export_date,
+                    rm.sent_at AS raw_export_sent_at,
                     rm.sent_at AS whatsapp_sent_at,
                     rm.sender AS whatsapp_sender,
                     rm.text AS whatsapp_text,
@@ -1649,7 +1671,7 @@ class Database:
                 FROM repair_records rr
                 LEFT JOIN raw_messages rm ON rm.id = rr.raw_message_id
                 LEFT JOIN work_schedules ws ON ws.id = rr.work_schedule_id
-                WHERE COALESCE(substr(rm.sent_at, 1, 10), rr.work_date) = ?
+                WHERE 1 = 1
                   {site_filter}
                 ORDER BY COALESCE(rr.site, ''), rr.staff_name, rr.id
                 """,
@@ -1658,6 +1680,12 @@ class Database:
         records = []
         for row in rows:
             record = dict(row)
+            record["export_date"] = _normalized_export_date(
+                str(record.pop("raw_export_sent_at") or ""),
+                str(record.get("work_date") or ""),
+            )
+            if record["export_date"] != work_date:
+                continue
             record["missing_items"] = loads(record.pop("missing_items_json", "[]"), [])
             record["next_actions"] = loads(record.pop("next_actions_json", "[]"), [])
             records.append(record)
@@ -1681,7 +1709,7 @@ class Database:
         return records
 
     def list_export_reminders(self, work_date: str, site: str | None = None) -> list[dict[str, Any]]:
-        params: list[Any] = [work_date]
+        params: list[Any] = []
         site_filter = ""
         if site:
             site_filter = "AND COALESCE(rr.site, '') = ?"
@@ -1691,7 +1719,7 @@ class Database:
                 f"""
                 SELECT
                     r.*,
-                    COALESCE(substr(rm.sent_at, 1, 10), rr.work_date) AS export_date,
+                    rm.sent_at AS raw_export_sent_at,
                     rr.work_date,
                     rr.staff_name,
                     rr.site,
@@ -1700,7 +1728,7 @@ class Database:
                 FROM reminders r
                 JOIN repair_records rr ON rr.id = r.repair_record_id
                 LEFT JOIN raw_messages rm ON rm.id = rr.raw_message_id
-                WHERE COALESCE(substr(rm.sent_at, 1, 10), rr.work_date) = ?
+                WHERE 1 = 1
                   {site_filter}
                 ORDER BY COALESCE(rr.site, ''), r.created_at ASC, r.id ASC
                 """,
@@ -1709,6 +1737,12 @@ class Database:
         reminders = []
         for row in rows:
             reminder = dict(row)
+            reminder["export_date"] = _normalized_export_date(
+                str(reminder.pop("raw_export_sent_at") or ""),
+                str(reminder.get("work_date") or ""),
+            )
+            if reminder["export_date"] != work_date:
+                continue
             reminder["result_payload"] = loads(reminder.pop("result_payload_json", "{}"), {})
             reminders.append(reminder)
         return reminders

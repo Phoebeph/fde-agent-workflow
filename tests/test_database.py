@@ -167,6 +167,44 @@ class DatabaseTests(unittest.TestCase):
             self.assertEqual(records[0]["missing_items"], ["维修报告 PDF"])
             self.assertEqual(records[0]["next_actions"], ["提醒补充维修报告 PDF"])
 
+    def test_export_repair_records_normalizes_yingdao_sent_at_date(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db = Database(Path(temp_dir) / "test.db")
+            db.init()
+            message = {
+                "group_name": "维修群",
+                "sender": "Casey",
+                "sent_at": "25/6/2026 上午10:51",
+                "text": "The SOUI TV wall 正常",
+                "message_fingerprint": "y" * 64,
+                "has_attachments": False,
+                "attachment_hints": [],
+                "raw_payload": {},
+            }
+            db.insert_messages([message])
+            stored = db.get_message_by_fingerprint("y" * 64)
+            db.save_repair_record(
+                stored["id"],
+                {
+                    "work_date": "2026-06-25",
+                    "staff_name": "Casey",
+                    "site": "The SOUI",
+                    "work_type": "maintenance",
+                    "summary": "TV wall 正常",
+                    "completion_status": "已完成",
+                    "completion_score": 100,
+                    "completion_level": "高",
+                    "missing_items": [],
+                    "next_actions": [],
+                },
+            )
+
+            records = db.list_export_repair_records("2026-06-25")
+
+            self.assertEqual(len(records), 1)
+            self.assertEqual(records[0]["export_date"], "2026-06-25")
+            self.assertEqual(records[0]["site"], "The SOUI")
+
     def test_save_repair_record_allows_multiple_items_per_message(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             db = Database(Path(temp_dir) / "test.db")
