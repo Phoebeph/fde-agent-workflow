@@ -58,6 +58,31 @@ class DatabaseTests(unittest.TestCase):
             attachments = db.list_attachments_for_message(stored["id"])
             self.assertEqual(attachments[0]["archive_filename"], "2026-06-10_site_Kei_work_image_abcd.jpg")
 
+    def test_download_jobs_wait_for_analysis_done(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db = Database(Path(temp_dir) / "test.db")
+            db.init()
+            message = {
+                "group_name": "维修群",
+                "sender": "Kei",
+                "sent_at": "2026-06-10T18:00:00+08:00",
+                "text": "完成，附相",
+                "message_fingerprint": "j" * 64,
+                "has_attachments": True,
+                "attachment_hints": [{"type": "image"}],
+                "raw_payload": {},
+            }
+            db.insert_messages([message])
+            stored = db.get_message_by_fingerprint("j" * 64)
+
+            self.assertEqual(db.list_download_jobs(), [])
+
+            db.mark_message_done(stored["id"])
+            jobs = db.list_download_jobs()
+
+            self.assertEqual(len(jobs), 1)
+            self.assertEqual(jobs[0]["message_fingerprint"], "j" * 64)
+
     def test_get_message_by_external_id(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             db = Database(Path(temp_dir) / "test.db")

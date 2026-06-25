@@ -19,6 +19,8 @@ SCAN_INTERVAL_SECONDS = 300
 INITIAL_SCAN_HOUR = 8
 MAX_INITIAL_SCROLLS = 80
 MAX_INCREMENTAL_SCROLLS = 4
+ATTACHMENT_JOB_WAIT_SECONDS = 90
+ATTACHMENT_JOB_POLL_SECONDS = 10
 
 ROW_XPATH = "xpath=//div[@role='row']"
 REL_CONTENT_XPATH = "xpath=.//span[contains(@class, 'selectable-text')]"
@@ -164,9 +166,22 @@ def detect_attachment_hints(row: Any) -> list[dict[str, str]]:
     return hints
 
 
-def download_pending_attachments(page: Any) -> None:
-    """Download jobs from backend. Fill download_attachment_for_message for the customer's Yingdao flow."""
-    jobs = get_json(f"{BACKEND_BASE_URL}/api/whatsapp/download-jobs?limit=50").get("jobs", [])
+def download_pending_attachments(page: Any, wait_seconds: int = ATTACHMENT_JOB_WAIT_SECONDS) -> None:
+    """Download analyzed attachment jobs from backend.
+
+    The backend only exposes attachment jobs after AI analysis is done, because the site/date
+    used for archiving comes from the generated repair record. Poll briefly after posting new
+    messages so attachments do not get downloaded before the site is known.
+    """
+    jobs: list[dict[str, Any]] = []
+    deadline = time.time() + wait_seconds
+    while time.time() <= deadline:
+        jobs = get_json(f"{BACKEND_BASE_URL}/api/whatsapp/download-jobs?limit=50").get("jobs", [])
+        if jobs:
+            break
+        time.sleep(ATTACHMENT_JOB_POLL_SECONDS)
+
+    print(f"附件下载任务 count={len(jobs)}")
     for job in jobs:
         downloaded_files = download_attachment_for_message(page, job)
         for file_path, attachment_type in downloaded_files:

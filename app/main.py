@@ -1118,7 +1118,8 @@ def ingest_attachment(
         raise HTTPException(status_code=404, detail="message reference not found")
     repair_records = db.list_repair_records_for_message(message["id"])
     matched_record = repair_records[0] if repair_records else {}
-    work_date = payload.work_date or matched_record.get("work_date") or message["sent_at"][:10]
+    export_date = _export_date_from_sent_at(str(message.get("sent_at") or ""))
+    work_date = payload.work_date or export_date or matched_record.get("work_date") or message["sent_at"][:10]
     site = payload.site or matched_record.get("site")
     staff_name = payload.staff_name or matched_record.get("staff_name") or message["sender"]
     work_type = payload.work_type or matched_record.get("work_type")

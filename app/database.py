@@ -580,6 +580,7 @@ class Database:
                 SELECT rm.*
                 FROM raw_messages rm
                 WHERE rm.has_attachments = 1
+                  AND rm.analysis_status = 'done'
                   AND NOT EXISTS (
                     SELECT 1 FROM attachments a WHERE a.raw_message_id = rm.id
                   )

@@ -173,6 +173,8 @@ GET http://127.0.0.1:8000/api/whatsapp/download-jobs?limit=50
 
 每个任务会包含 `message_fingerprint`、`external_message_id`、发送人、时间、正文、附件提示等信息。影刀按这些信息回到 WhatsApp Web 找到对应消息。
 
+后端只会在消息已经完成 AI 分析后才返回附件下载任务。这样附件回传时，后端已经知道维修记录里的地点，可以把图片/PDF 归档到 `DATA_ROOT\年\月\日\地点\`。其中日期优先使用 WhatsApp 消息发送日期，而不是消息正文里的实际工作日期。
+
 ### 下载和回传
 
 1. 在 WhatsApp Web 找到对应消息。
