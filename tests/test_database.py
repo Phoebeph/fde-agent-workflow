@@ -191,6 +191,8 @@ class DatabaseTests(unittest.TestCase):
             self.assertEqual(records[0]["completion_level"], "较高")
             self.assertEqual(records[0]["missing_items"], ["维修报告 PDF"])
             self.assertEqual(records[0]["next_actions"], ["提醒补充维修报告 PDF"])
+            self.assertEqual(records[0]["whatsapp_sender"], "Casey")
+            self.assertEqual(records[0]["whatsapp_text"], "商场C 已处理，维修报告 PDF 后补。")
 
     def test_export_repair_records_normalizes_yingdao_sent_at_date(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.services.deepseek import to_simplified_text
+from app.services.reminder_text import generate_analysis_reminder_message
 from app.services.scoring import apply_completion_score
 
 
@@ -29,8 +30,33 @@ def apply_schedule_completion(
     result = dict(analysis)
     matched = match_schedule(message, schedules)
     if not matched:
+        message_text = to_simplified_text(str(message.get("text") or ""))
+        required_items = required_evidence("", message_text)
+        result["missing_items"] = _filter_items_with_evidence(
+            _dedupe([to_simplified_text(item) for item in list(result.get("missing_items") or [])]),
+            message_text,
+            attachments,
+            required_items,
+        )
+        result["next_actions"] = _filter_items_with_evidence(
+            _dedupe([to_simplified_text(item) for item in list(result.get("next_actions") or [])]),
+            message_text,
+            attachments,
+            required_items,
+        )
+        if not result["missing_items"] and result.get("completion_status") in {"资料不足", "資料不足"}:
+            result["completion_status"] = "已完成" if has_clear_result(message_text) else "待人工确认"
+        if result.get("completion_status") != "已完成" and (
+            result.get("missing_items") or result.get("next_actions") or result.get("completion_status") in {"未回复", "未回覆", "需要跟进", "需要跟進"}
+        ):
+            result["reminder_text"] = generate_analysis_reminder_message(
+                result,
+                record=_message_record(message),
+            )
+        else:
+            result["reminder_text"] = ""
         result["schedule_match_status"] = "未匹配计划任务" if schedules else "无计划任务上下文"
-        return result
+        return apply_completion_score(result)
 
     schedule_text = _schedule_text(matched)
     message_text = to_simplified_text(str(message.get("text") or ""))
@@ -82,8 +108,10 @@ def apply_schedule_completion(
         result["completion_status"] = "已完成"
 
     if result["completion_status"] != "已完成":
-        reason = "、".join(result["missing_items"] or result["next_actions"] or [result["completion_status"]])
-        result["reminder_text"] = f"@{result['staff_name'] or '相关同事'} 请补充/确认：{reason}"
+        result["reminder_text"] = generate_analysis_reminder_message(
+            result,
+            record=_message_record(message),
+        )
     return apply_completion_score(result)
 
 
@@ -193,7 +221,6 @@ def schedule_gap_analysis(schedule: dict[str, Any]) -> dict[str, Any]:
         "completion_status": "未回复",
         "missing_items": ["工作结果回复"],
         "next_actions": ["提醒同事补充当天工作结果"],
-        "reminder_text": f"@{staff} 今天有计划任务未见完成回复，请补充工作结果：{reason}",
         "matched_schedule": {
             "work_date": schedule.get("work_date"),
             "staff_name": staff,
@@ -202,7 +229,15 @@ def schedule_gap_analysis(schedule: dict[str, Any]) -> dict[str, Any]:
         },
         "schedule_match_status": "计划任务未回复",
     }
+    analysis["reminder_text"] = generate_analysis_reminder_message(analysis)
     return apply_completion_score(analysis)
+
+
+def _message_record(message: dict[str, Any]) -> str:
+    sender = str(message.get("sender") or "").strip()
+    sent_at = str(message.get("sent_at") or "").strip()
+    text = str(message.get("text") or "").strip()
+    return " ".join(part for part in [sender, sent_at, text] if part)
 
 
 def infer_work_type(text: str) -> str:

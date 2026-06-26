@@ -1508,9 +1508,15 @@ class Database:
         with self.connect() as conn:
             rows = conn.execute(
                 f"""
-                SELECT rr.*, ws.task_text
+                SELECT
+                    rr.*,
+                    ws.task_text,
+                    rm.sent_at AS whatsapp_sent_at,
+                    rm.sender AS whatsapp_sender,
+                    rm.text AS whatsapp_text
                 FROM repair_records rr
                 LEFT JOIN work_schedules ws ON ws.id = rr.work_schedule_id
+                LEFT JOIN raw_messages rm ON rm.id = rr.raw_message_id
                 WHERE rr.completion_status IN ({",".join("?" for _ in statuses)})
                   AND rr.raw_message_id IS NOT NULL
                   {date_filter}

@@ -179,6 +179,28 @@ class CompletionTests(unittest.TestCase):
         self.assertEqual(analysis["missing_items"], [])
         self.assertEqual(analysis["completion_status"], "已完成")
 
+    def test_unmatched_generic_ai_photo_pdf_missing_is_filtered(self) -> None:
+        analysis = apply_schedule_completion(
+            analysis={
+                "completion_status": "资料不足",
+                "missing_items": ["照片记录", "维修报告 PDF"],
+                "next_actions": ["请补充照片和维修报告"],
+            },
+            message={
+                "sender": "Brian",
+                "sent_at": "2026-06-10 11:00",
+                "text": "商场B 门磁坏已更换，测试正常。",
+                "attachment_hints": [],
+            },
+            attachments=[],
+            schedules=[],
+        )
+
+        self.assertEqual(analysis["missing_items"], [])
+        self.assertEqual(analysis["next_actions"], [])
+        self.assertEqual(analysis["completion_status"], "已完成")
+        self.assertEqual(analysis["reminder_text"], "")
+
     def test_quote_work_requires_wide_and_close_up_photo_record(self) -> None:
         analysis = apply_schedule_completion(
             analysis={"completion_status": "已完成", "missing_items": [], "next_actions": []},
@@ -201,6 +223,8 @@ class CompletionTests(unittest.TestCase):
         )
 
         self.assertIn("照片记录（Wide Shot 和 Close Up）", analysis["missing_items"])
+        self.assertIn("有冇 Photo Record / 相片參考?", analysis["reminder_text"])
+        self.assertIn("Record:", analysis["reminder_text"])
 
     def test_atal_material_replacement_requires_three_photos_and_pdf(self) -> None:
         analysis = apply_schedule_completion(

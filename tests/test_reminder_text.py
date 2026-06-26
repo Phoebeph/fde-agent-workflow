@@ -2,7 +2,7 @@ import unittest
 
 from app.main import preview_reminder
 from app.schemas import ReminderPreviewIn
-from app.services.reminder_text import generate_reminder_message
+from app.services.reminder_text import generate_analysis_reminder_message, generate_reminder_message, reminder_missing_type
 
 
 class ReminderTextTests(unittest.TestCase):
@@ -89,6 +89,37 @@ class ReminderTextTests(unittest.TestCase):
 
         self.assertIn("咩情況? 有冇最新跟進結果?", message)
         self.assertIn("第1次问", message)
+
+    def test_analysis_reminder_maps_pdf_missing_to_template(self) -> None:
+        message = generate_analysis_reminder_message(
+            {
+                "staff_name": "Brian",
+                "work_date": "2026-06-19",
+                "site": "The Henderson",
+                "summary": "ecall service 維修",
+                "completion_status": "资料不足",
+                "missing_items": ["维修报告 PDF"],
+                "next_actions": [],
+            },
+            record="Brian 2026-06-19 ecall service 維修完成",
+        )
+
+        self.assertIn("@Brian Brian，仲未收到你回覆（第1次问）", message)
+        self.assertIn("Brian，19-Jun，The Henderson", message)
+        self.assertIn("有冇維修報告掃描?", message)
+        self.assertIn("Record:", message)
+
+    def test_missing_type_ignores_generic_photo_when_not_in_analysis(self) -> None:
+        missing_type = reminder_missing_type(
+            {
+                "completion_status": "需要跟进",
+                "summary": "普通维修需要确认结果",
+                "missing_items": [],
+                "next_actions": ["补充明确工作结果"],
+            }
+        )
+
+        self.assertEqual(missing_type, "work_result")
 
     def test_preview_api_returns_message(self) -> None:
         response = preview_reminder(

@@ -39,7 +39,7 @@ from app.services.feishu import FeishuClient, FeishuError
 from app.services.fingerprint import message_fingerprint
 from app.services.issues import issue_candidate_from_message, issue_schedule_match_score
 from app.services.local_export import export_daily_workbook
-from app.services.reminder_text import generate_reminder_message
+from app.services.reminder_text import generate_analysis_reminder_message, generate_reminder_message
 from app.services.rules import load_rules_from_xlsx
 
 
@@ -491,16 +491,13 @@ def _repair_record_followup_analysis(record: dict[str, object]) -> dict[str, obj
     staff_name = str(record.get("staff_name") or "相关同事")
     site = str(record.get("site") or "")
     task_text = str(record.get("task_text") or "")
-    reason_items = missing_items or next_actions or [status]
-    reason = "、".join(str(item) for item in reason_items if str(item).strip()) or status
-    context = " ".join(item for item in [site, task_text] if item).strip()
-    suffix = f"（{context}）" if context else ""
-    return {
+    analysis = {
         "work_schedule_id": record.get("work_schedule_id"),
         "work_date": record.get("work_date"),
         "staff_name": staff_name,
         "site": site,
         "work_type": record.get("work_type"),
+        "task_text": task_text,
         "summary": record.get("summary") or "",
         "result": record.get("result") or "",
         "completion_status": status,
@@ -508,8 +505,16 @@ def _repair_record_followup_analysis(record: dict[str, object]) -> dict[str, obj
         "completion_level": record.get("completion_level", ""),
         "missing_items": missing_items,
         "next_actions": next_actions,
-        "reminder_text": f"@{staff_name} 请补充/确认：{reason}{suffix}",
     }
+    analysis["reminder_text"] = generate_analysis_reminder_message(
+        analysis,
+        record=" ".join(
+            str(record.get(key) or "").strip()
+            for key in ("whatsapp_sender", "whatsapp_sent_at", "whatsapp_text")
+            if str(record.get(key) or "").strip()
+        ),
+    )
+    return analysis
 
 
 def _run_auto_followups(work_date: str, limit: int) -> dict[str, object]:
