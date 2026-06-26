@@ -19,6 +19,7 @@ from app.schemas import (
     IssueConvertIn,
     IssueDecisionIn,
     MockWhatsAppMessageIn,
+    ReminderPreviewIn,
     ReminderResultIn,
     RuleImportIn,
     ScheduleImportIn,
@@ -38,6 +39,7 @@ from app.services.feishu import FeishuClient, FeishuError
 from app.services.fingerprint import message_fingerprint
 from app.services.issues import issue_candidate_from_message, issue_schedule_match_score
 from app.services.local_export import export_daily_workbook
+from app.services.reminder_text import generate_reminder_message
 from app.services.rules import load_rules_from_xlsx
 
 
@@ -1259,6 +1261,11 @@ def cleanup_label_records() -> dict[str, object]:
 @app.get("/api/reminders/pending")
 def pending_reminders(limit: int = Query(default=50, ge=1, le=500)) -> dict[str, object]:
     return {"reminders": db.list_pending_reminders(limit)}
+
+
+@app.post("/api/reminders/preview")
+def preview_reminder(payload: ReminderPreviewIn) -> dict[str, str]:
+    return {"message": generate_reminder_message(payload.model_dump())}
 
 
 @app.post("/api/reminders/result")

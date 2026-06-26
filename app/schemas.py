@@ -195,6 +195,17 @@ class ReminderResultIn(BaseModel):
     result_payload: dict[str, Any] = Field(default_factory=dict)
 
 
+class ReminderPreviewIn(BaseModel):
+    mention_name: str | None = ""
+    assignee: str | None = ""
+    reminder_count: int | None = Field(default=1, ge=1)
+    task_date: str | None = ""
+    site: str | None = ""
+    task_content: str | None = ""
+    missing_type: str | None = "unknown"
+    record: str | None = ""
+
+
 class StaffConfigIn(BaseModel):
     id: int | None = Field(default=None, ge=1)
     name: str = Field(min_length=1)
