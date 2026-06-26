@@ -1,17 +1,22 @@
 from __future__ import annotations
 
 from datetime import datetime
+import logging
 from pathlib import Path
 import re
 import threading
 import uuid
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
-from fastapi.responses import HTMLResponse
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import HTMLResponse, JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.admin_ui import admin_settings_html
 from app.config import settings
 from app.database import Database
+from app.logging_config import configure_backend_logging
 from app.schemas import (
     AnalyzeRunIn,
     AnalyzeResetIn,
@@ -45,6 +50,7 @@ from app.services.rules import load_rules_from_xlsx
 
 
 app = FastAPI(title="WhatsApp Repair AI Backend", version="0.1.0")
+logger = logging.getLogger("app.main")
 db = Database(settings.database_path)
 DOWNLOADS_DIR = settings.downloads_root
 AUTO_PIPELINE_LOCK = threading.Lock()
@@ -71,6 +77,64 @@ ATTACHMENT_LABEL_TEXTS = {
     "換後",
     "换后",
 }
+
+
+def _validation_errors_for_log(exc: RequestValidationError) -> list[dict[str, object]]:
+    errors = []
+    for error in exc.errors():
+        safe_error = {
+            key: value
+            for key, value in error.items()
+            if key not in {"input", "url"}
+        }
+        errors.append(safe_error)
+    return errors
+
+
+@app.exception_handler(RequestValidationError)
+async def request_validation_exception_handler(
+    request: Request,
+    exc: RequestValidationError,
+) -> JSONResponse:
+    errors = _validation_errors_for_log(exc)
+    logger.warning(
+        "request validation failed status=422 path=%s method=%s errors=%s",
+        request.url.path,
+        request.method,
+        errors,
+    )
+    return JSONResponse(
+        status_code=422,
+        content={"detail": jsonable_encoder(exc.errors())},
+    )
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+    level = logging.WARNING if exc.status_code < 500 else logging.ERROR
+    logger.log(
+        level,
+        "request failed status=%s path=%s method=%s detail=%s",
+        exc.status_code,
+        request.url.path,
+        request.method,
+        exc.detail,
+    )
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": jsonable_encoder(exc.detail)},
+        headers=getattr(exc, "headers", None),
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    logger.exception(
+        "unhandled request error path=%s method=%s",
+        request.url.path,
+        request.method,
+    )
+    return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
 
 
 def deepseek_client() -> DeepSeekClient:
@@ -835,6 +899,8 @@ def _create_manual_mock_attachments(
 @app.on_event("startup")
 def startup() -> None:
     _ensure_local_directories()
+    log_path = configure_backend_logging(settings.logs_root)
+    logger.info("backend startup log_path=%s", log_path)
     db.init()
     _sync_customer_settings_to_database()
 
@@ -1236,12 +1302,26 @@ def ingest_attachment(
     payload: AttachmentIn,
     background_tasks: BackgroundTasks,
 ) -> dict[str, object]:
+    logger.info(
+        "attachment ingest received external_message_id=%s message_fingerprint=%s "
+        "original_filename=%s temp_path=%s attachment_type=%s",
+        payload.external_message_id,
+        payload.message_fingerprint,
+        payload.original_filename,
+        payload.temp_path,
+        payload.attachment_type,
+    )
     message = None
     if payload.message_fingerprint:
         message = db.get_message_by_fingerprint(payload.message_fingerprint)
     if not message and payload.external_message_id:
         message = db.get_message_by_external_id(payload.external_message_id)
     if not message:
+        logger.warning(
+            "attachment message reference not found external_message_id=%s message_fingerprint=%s",
+            payload.external_message_id,
+            payload.message_fingerprint,
+        )
         raise HTTPException(status_code=404, detail="message reference not found")
     repair_records = db.list_repair_records_for_message(message["id"])
     matched_record = repair_records[0] if repair_records else {}
@@ -1262,6 +1342,14 @@ def ingest_attachment(
             attachment_type=payload.attachment_type,
         )
     except FileNotFoundError as exc:
+        logger.warning(
+            "attachment file not found external_message_id=%s message_fingerprint=%s "
+            "temp_path=%s detail=%s",
+            payload.external_message_id,
+            payload.message_fingerprint,
+            payload.temp_path,
+            exc,
+        )
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     inserted = db.insert_attachment(
@@ -1283,6 +1371,16 @@ def ingest_attachment(
             fingerprints=[message["message_fingerprint"]],
             background_tasks=background_tasks,
         )
+    logger.info(
+        "attachment archived inserted=%s external_message_id=%s message_fingerprint=%s "
+        "archive_path=%s archive_filename=%s sha256=%s",
+        inserted,
+        payload.external_message_id,
+        payload.message_fingerprint,
+        archived.archive_path,
+        archived.archive_filename,
+        archived.sha256,
+    )
     return {
         "inserted": inserted,
         "archive_path": archived.archive_path,

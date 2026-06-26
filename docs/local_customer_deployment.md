@@ -26,7 +26,7 @@ C:\Users\test\data\
   downloads\
     yingdao\                    影刀临时下载目录，文件回传后由后端复制到正式日期/地点目录
   logs\
-    backend.log                 后端运行日志
+    backend.log                 后端运行日志，包含附件回传 422/400/404/500 错误
     yingdao.log                 影刀流程日志
   backups\
     whatsapp_repair_YYYYMMDD.db 数据库备份
@@ -54,6 +54,14 @@ BACKUPS_ROOT=C:\Users\test\data\backups
 ```
 
 后端启动时会自动创建这些目录，客户电脑不需要手工逐个建立目录。
+
+后端启动后会自动写入：
+
+```text
+C:\Users\test\data\logs\backend.log
+```
+
+如果附件同步失败，优先查看 `backend.log`。常见记录包括附件接口 422 字段校验错误、400 本地文件不存在、404 消息引用找不到，以及未捕获异常堆栈。影刀流程自己的操作日志仍建议写入 `yingdao.log`。
 
 正式本地部署不需要配置飞书，也不需要开启 `FEISHU_MOCK_MODE`。维修记录以 `repair_records`、每日 Excel 和本地附件归档为准。
 
