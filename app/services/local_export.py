@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import shutil
 from typing import Any
 from xml.sax.saxutils import escape
 from zipfile import ZIP_DEFLATED, ZipFile
@@ -49,6 +50,9 @@ def export_daily_workbook(
             attachment_checks=db.list_export_attachment_checks(work_date, site),
             reminders=db.list_export_reminders(work_date, site),
         )
+        site_index_dir = by_site_export_dir(export_root, work_date, site)
+        site_index_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(site_path, site_index_dir / site_path.name)
         site_paths.append(str(site_path))
 
     return ExportResult(total_path=str(total_path), site_paths=site_paths)
@@ -59,6 +63,13 @@ def dated_export_dir(root: Path, work_date: str) -> Path:
     month = work_date[5:7] if len(work_date) >= 7 and work_date[5:7].isdigit() else "unknown_month"
     day = work_date[8:10] if len(work_date) >= 10 and work_date[8:10].isdigit() else "unknown_day"
     return root / year / month / day
+
+
+def by_site_export_dir(root: Path, work_date: str, site: str) -> Path:
+    year = work_date[:4] if len(work_date) >= 4 and work_date[:4].isdigit() else "unknown_year"
+    month = work_date[5:7] if len(work_date) >= 7 and work_date[5:7].isdigit() else "unknown_month"
+    day = work_date[8:10] if len(work_date) >= 10 and work_date[8:10].isdigit() else "unknown_day"
+    return root / "by_site" / safe_part(site, "unknown_site") / year / month / day
 
 
 def _write_export_workbook(

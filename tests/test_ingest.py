@@ -1,8 +1,9 @@
 import unittest
 from unittest.mock import patch
 
-from app.main import _is_standalone_attachment_label, ingest_whatsapp_messages
+from app.main import _is_standalone_attachment_label, _site_is_watched_for_reminder, ingest_whatsapp_messages
 from app.schemas import WhatsAppMessageBatchIn
+from app.services.customer_config import CustomerSettings, CustomerSite, CustomerWhatsAppConfig
 
 
 class FakeDatabase:
@@ -127,6 +128,47 @@ class IngestTests(unittest.TestCase):
         self.assertEqual(result["messages"], {"inserted": 1, "skipped": 0, "filtered": 0})
         self.assertTrue(result["auto_pipeline"]["scheduled"])
         schedule_pipeline.assert_called_once()
+
+    def test_ingest_ignores_unwatched_group(self) -> None:
+        fake_db = FakeDatabase()
+        payload = WhatsAppMessageBatchIn.model_validate(
+            {
+                "group_name": "unrelated",
+                "messages": [
+                    {
+                        "发送者": "aaa",
+                        "消息内容": "The SOUI Tv wall 正常",
+                        "时间": "24/6/2026 上午10:51",
+                    },
+                ],
+            }
+        )
+        customer_settings = CustomerSettings(
+            whatsapp=CustomerWhatsAppConfig(watch_groups=["test"]),
+            loaded=True,
+        )
+
+        with patch("app.main.CUSTOMER_SETTINGS", customer_settings):
+            result = ingest_whatsapp_messages(payload, background_tasks=object())
+
+        self.assertEqual(result["messages"], {"inserted": 0, "skipped": 0, "filtered": 1})
+        self.assertFalse(fake_db.insert_called)
+        self.assertFalse(result["auto_pipeline"]["scheduled"])
+
+    def test_site_filter_only_allows_enabled_customer_sites_for_reminders(self) -> None:
+        customer_settings = CustomerSettings(
+            whatsapp=CustomerWhatsAppConfig(watch_groups=["test"]),
+            sites=[
+                CustomerSite(name="淺水灣", aliases=["浅水湾", "Repulse Bay"], enabled=True),
+                CustomerSite(name="无关地点", aliases=["ignore"], enabled=False),
+            ],
+            loaded=True,
+        )
+
+        with patch("app.main.CUSTOMER_SETTINGS", customer_settings):
+            self.assertTrue(_site_is_watched_for_reminder({"site": "Repulse Bay", "summary": ""}))
+            self.assertFalse(_site_is_watched_for_reminder({"site": "无关地点", "summary": ""}))
+            self.assertFalse(_site_is_watched_for_reminder({"site": "其他地方", "summary": "需要跟进"}))
 
 
 if __name__ == "__main__":

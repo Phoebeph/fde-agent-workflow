@@ -224,7 +224,7 @@ class CompletionTests(unittest.TestCase):
 
         self.assertIn("照片记录（Wide Shot 和 Close Up）", analysis["missing_items"])
         self.assertIn("有冇 Photo Record / 相片參考?", analysis["reminder_text"])
-        self.assertIn("Record:", analysis["reminder_text"])
+        self.assertNotIn("Record:", analysis["reminder_text"])
 
     def test_atal_material_replacement_requires_three_photos_and_pdf(self) -> None:
         analysis = apply_schedule_completion(

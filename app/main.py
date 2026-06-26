@@ -30,8 +30,9 @@ from app.schemas import (
     SystemPrinciplesIn,
     WhatsAppMessageBatchIn,
 )
-from app.services.archive import archive_attachment
+from app.services.archive import archive_attachment, safe_part
 from app.services.completion import apply_schedule_completion, schedule_gap_analysis
+from app.services.customer_config import CustomerSettings, load_customer_settings
 from app.services.diagnostics import build_location_coverage_report, infer_location_from_item
 from app.services.deepseek import DeepSeekClient, DeepSeekError, rule_based_analysis, split_work_item_text
 from app.services.dispatch import discover_dispatch_schedules, followup_tracking_to_event
@@ -47,6 +48,7 @@ app = FastAPI(title="WhatsApp Repair AI Backend", version="0.1.0")
 db = Database(settings.database_path)
 DOWNLOADS_DIR = settings.downloads_root
 AUTO_PIPELINE_LOCK = threading.Lock()
+CUSTOMER_SETTINGS: CustomerSettings = load_customer_settings(settings.customer_settings_path)
 AUTOMATION_NOTICE_MARKERS = ("自动化助手提示",)
 ATTACHMENT_LABEL_TEXTS = {
     "前",
@@ -177,6 +179,7 @@ def _chunk_substance_is_covered(chunk: str, existing_text: str) -> bool:
 
 def _ensure_local_directories() -> None:
     settings.database_path.parent.mkdir(parents=True, exist_ok=True)
+    settings.customer_settings_path.parent.mkdir(parents=True, exist_ok=True)
     for path in (
         settings.archive_root,
         settings.downloads_root,
@@ -185,6 +188,56 @@ def _ensure_local_directories() -> None:
         settings.backups_root,
     ):
         path.mkdir(parents=True, exist_ok=True)
+
+
+def _sync_customer_settings_to_database() -> None:
+    if not CUSTOMER_SETTINGS.loaded or CUSTOMER_SETTINGS.error:
+        return
+    for site in CUSTOMER_SETTINGS.sites:
+        db.upsert_site_config(
+            {
+                "name": site.name,
+                "aliases": site.aliases,
+                "notes": "customer_settings.json",
+                "is_active": site.enabled,
+            }
+        )
+
+
+def _group_is_watched(group_name: str) -> bool:
+    watched = CUSTOMER_SETTINGS.whatsapp.watch_groups if CUSTOMER_SETTINGS.loaded and not CUSTOMER_SETTINGS.error else []
+    if not watched:
+        return True
+    normalized = group_name.strip().casefold()
+    return any(normalized == item.strip().casefold() for item in watched)
+
+
+def _match_enabled_customer_site(text: str) -> str:
+    if not CUSTOMER_SETTINGS.loaded or CUSTOMER_SETTINGS.error:
+        return ""
+    normalized = str(text or "").casefold()
+    for site in CUSTOMER_SETTINGS.sites:
+        if not site.enabled:
+            continue
+        candidates = [site.name, *site.aliases]
+        if any(candidate and candidate.casefold() in normalized for candidate in candidates):
+            return site.name
+    return ""
+
+
+def _site_is_watched_for_reminder(analysis: dict[str, object]) -> bool:
+    enabled_sites = [
+        site
+        for site in CUSTOMER_SETTINGS.sites
+        if CUSTOMER_SETTINGS.loaded and not CUSTOMER_SETTINGS.error and site.enabled
+    ]
+    if not enabled_sites:
+        return True
+    text = "\n".join(
+        str(analysis.get(key) or "")
+        for key in ("site", "summary", "result", "whatsapp_text")
+    )
+    return bool(_match_enabled_customer_site(text))
 
 
 def _analyze_messages(messages: list[dict[str, object]], sync_feishu: bool) -> dict[str, object]:
@@ -231,6 +284,7 @@ def _analyze_messages(messages: list[dict[str, object]], sync_feishu: bool) -> d
                     attachments=attachments,
                     schedules=schedules,
                 )
+                analysis["whatsapp_text"] = str(message.get("text") or "").strip()
                 feishu_record_id = None
                 if sync_feishu and settings.feishu_sync_available:
                     fields = feishu.fields_for_repair_record(message, analysis, attachments)
@@ -254,7 +308,11 @@ def _analyze_messages(messages: list[dict[str, object]], sync_feishu: bool) -> d
                     feishu_record_id,
                     item_index=item_index,
                 )
-                reminder_created = db.create_reminder_if_needed(record_id, analysis)
+                reminder_created = (
+                    db.create_reminder_if_needed(record_id, analysis)
+                    if _site_is_watched_for_reminder(analysis)
+                    else False
+                )
                 if reminder_created:
                     reminders_created += 1
                 records.append(
@@ -470,7 +528,11 @@ def _sync_schedule_gap(
         else:
             feishu_record_id = db.save_mock_feishu_record(fields)
     record_id = db.save_schedule_gap_record(schedule, analysis, feishu_record_id)
-    reminder_created = db.create_reminder_if_needed(record_id, analysis)
+    reminder_created = (
+        db.create_reminder_if_needed(record_id, analysis)
+        if _site_is_watched_for_reminder(analysis)
+        else False
+    )
     return {
         "repair_record_id": record_id,
         "work_schedule_id": schedule["id"],
@@ -506,14 +568,8 @@ def _repair_record_followup_analysis(record: dict[str, object]) -> dict[str, obj
         "missing_items": missing_items,
         "next_actions": next_actions,
     }
-    analysis["reminder_text"] = generate_analysis_reminder_message(
-        analysis,
-        record=" ".join(
-            str(record.get(key) or "").strip()
-            for key in ("whatsapp_sender", "whatsapp_sent_at", "whatsapp_text")
-            if str(record.get(key) or "").strip()
-        ),
-    )
+    analysis["reminder_text"] = generate_analysis_reminder_message(analysis)
+    analysis["whatsapp_text"] = str(record.get("whatsapp_text") or "").strip()
     return analysis
 
 
@@ -541,7 +597,11 @@ def _run_auto_followups(work_date: str, limit: int) -> dict[str, object]:
     )
     for record in repair_records:
         analysis = _repair_record_followup_analysis(record)
-        reminder_created = db.create_reminder_if_needed(int(record["id"]), analysis)
+        reminder_created = (
+            db.create_reminder_if_needed(int(record["id"]), analysis)
+            if _site_is_watched_for_reminder(analysis)
+            else False
+        )
         if reminder_created:
             reminders_created += 1
         existing_record_items.append(
@@ -776,6 +836,7 @@ def _create_manual_mock_attachments(
 def startup() -> None:
     _ensure_local_directories()
     db.init()
+    _sync_customer_settings_to_database()
 
 
 @app.get("/health")
@@ -787,6 +848,39 @@ def health() -> dict[str, object]:
         "feishu_enabled": settings.feishu_enabled,
         "feishu_mock_mode": settings.feishu_mock_mode,
         "feishu_sync_available": settings.feishu_sync_available,
+        "customer_settings": {
+            "path": str(settings.customer_settings_path),
+            "loaded": CUSTOMER_SETTINGS.loaded,
+            "error": CUSTOMER_SETTINGS.error,
+            "watch_groups": CUSTOMER_SETTINGS.whatsapp.watch_groups,
+            "reminder_sender_account": CUSTOMER_SETTINGS.whatsapp.reminder_sender_account,
+            "scan_interval_minutes": CUSTOMER_SETTINGS.whatsapp.scan_interval_minutes,
+            "reminder_interval_minutes": CUSTOMER_SETTINGS.whatsapp.reminder_interval_minutes,
+            "sites_count": len(CUSTOMER_SETTINGS.sites),
+        },
+    }
+
+
+@app.get("/api/config/customer")
+def customer_config() -> dict[str, object]:
+    return {
+        "path": str(settings.customer_settings_path),
+        "loaded": CUSTOMER_SETTINGS.loaded,
+        "error": CUSTOMER_SETTINGS.error,
+        "whatsapp": {
+            "watch_groups": CUSTOMER_SETTINGS.whatsapp.watch_groups,
+            "reminder_sender_account": CUSTOMER_SETTINGS.whatsapp.reminder_sender_account,
+            "scan_interval_minutes": CUSTOMER_SETTINGS.whatsapp.scan_interval_minutes,
+            "reminder_interval_minutes": CUSTOMER_SETTINGS.whatsapp.reminder_interval_minutes,
+        },
+        "sites": [
+            {
+                "name": site.name,
+                "aliases": site.aliases,
+                "enabled": site.enabled,
+            }
+            for site in CUSTOMER_SETTINGS.sites
+        ],
     }
 
 
@@ -902,6 +996,22 @@ def ingest_whatsapp_messages(
     payload: WhatsAppMessageBatchIn,
     background_tasks: BackgroundTasks | None = None,
 ) -> dict[str, object]:
+    if not _group_is_watched(payload.group_name):
+        return {
+            "messages": {"inserted": 0, "skipped": 0, "filtered": len(payload.messages)},
+            "dispatch_schedules": {
+                "candidates": 0,
+                "inserted": 0,
+                "skipped": 0,
+                "marked_messages": 0,
+                "followup_marked_messages": 0,
+                "followup_events": 0,
+                "issue_records": 0,
+                "auto_converted_issues": [],
+                "schedules": [],
+            },
+            "auto_pipeline": {"scheduled": False, "reason": "ignored unwatched group"},
+        }
     rows = []
     fingerprints = []
     filtered = 0
@@ -1049,7 +1159,17 @@ def ingest_mock_whatsapp_message(payload: MockWhatsAppMessageIn) -> dict[str, ob
 
 @app.get("/api/whatsapp/download-jobs")
 def whatsapp_download_jobs(limit: int = Query(default=50, ge=1, le=500)) -> dict[str, object]:
-    return {"jobs": db.list_download_jobs(limit)}
+    jobs = []
+    for job in db.list_download_jobs(limit):
+        work_date = _export_date_from_sent_at(str(job.get("sent_at") or "")) or str(job.get("work_date") or "")
+        site = str(job.get("site") or "unknown_site")
+        job["suggested_download_dir"] = str(
+            settings.downloads_root
+            / safe_part(site, "unknown_site")
+            / safe_part(work_date, "unknown_date")
+        )
+        jobs.append(job)
+    return {"jobs": jobs}
 
 
 @app.get("/api/whatsapp/messages/recent")

@@ -90,6 +90,19 @@ class LocalExportTests(unittest.TestCase):
             self.assertEqual(len(result.site_paths), 2)
             self.assertTrue(any("The_SOUI" in path for path in result.site_paths))
             self.assertTrue(any("新村" in path for path in result.site_paths))
+            for site_path in result.site_paths:
+                path = Path(site_path)
+                site = path.parent.name
+                by_site_copy = (
+                    Path(temp_dir)
+                    / "by_site"
+                    / site
+                    / "2026"
+                    / "06"
+                    / "19"
+                    / path.name
+                )
+                self.assertTrue(by_site_copy.exists())
 
             with ZipFile(total_path) as workbook:
                 workbook_xml = workbook.read("xl/workbook.xml").decode("utf-8")

@@ -69,6 +69,7 @@ class Settings:
     exports_root: Path = _path_env("EXPORTS_ROOT", DATA_ROOT if DATA_ROOT else "./exports")
     logs_root: Path = _path_env("LOGS_ROOT", (DATA_ROOT / "logs") if DATA_ROOT else "./logs")
     backups_root: Path = _path_env("BACKUPS_ROOT", (DATA_ROOT / "backups") if DATA_ROOT else "./backups")
+    customer_settings_path: Path = _path_env("CUSTOMER_SETTINGS_PATH", "./config/customer_settings.json")
 
     deepseek_api_key: str = os.getenv("DEEPSEEK_API_KEY", "")
     deepseek_base_url: str = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")

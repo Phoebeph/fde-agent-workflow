@@ -1,0 +1,20 @@
+{
+  "whatsapp": {
+    "watch_groups": ["test"],
+    "reminder_sender_account": "客户WhatsApp账号名称",
+    "scan_interval_minutes": 5,
+    "reminder_interval_minutes": 30
+  },
+  "sites": [
+    {
+      "name": "淺水灣",
+      "aliases": ["浅水湾", "Repulse Bay"],
+      "enabled": true
+    },
+    {
+      "name": "LPP",
+      "aliases": ["LPP Free Access", "L212D", "L322", "L323B"],
+      "enabled": true
+    }
+  ]
+}

@@ -49,10 +49,7 @@ def apply_schedule_completion(
         if result.get("completion_status") != "已完成" and (
             result.get("missing_items") or result.get("next_actions") or result.get("completion_status") in {"未回复", "未回覆", "需要跟进", "需要跟進"}
         ):
-            result["reminder_text"] = generate_analysis_reminder_message(
-                result,
-                record=_message_record(message),
-            )
+            result["reminder_text"] = generate_analysis_reminder_message(result)
         else:
             result["reminder_text"] = ""
         result["schedule_match_status"] = "未匹配计划任务" if schedules else "无计划任务上下文"
@@ -108,10 +105,7 @@ def apply_schedule_completion(
         result["completion_status"] = "已完成"
 
     if result["completion_status"] != "已完成":
-        result["reminder_text"] = generate_analysis_reminder_message(
-            result,
-            record=_message_record(message),
-        )
+        result["reminder_text"] = generate_analysis_reminder_message(result)
     return apply_completion_score(result)
 
 
@@ -231,13 +225,6 @@ def schedule_gap_analysis(schedule: dict[str, Any]) -> dict[str, Any]:
     }
     analysis["reminder_text"] = generate_analysis_reminder_message(analysis)
     return apply_completion_score(analysis)
-
-
-def _message_record(message: dict[str, Any]) -> str:
-    sender = str(message.get("sender") or "").strip()
-    sent_at = str(message.get("sent_at") or "").strip()
-    text = str(message.get("text") or "").strip()
-    return " ".join(part for part in [sender, sent_at, text] if part)
 
 
 def infer_work_type(text: str) -> str:

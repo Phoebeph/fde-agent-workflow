@@ -58,11 +58,16 @@ def archive_attachment(
     day = date_part[8:10] if len(date_part) >= 10 and date_part[8:10].isdigit() else "unknown_day"
     target_dir = archive_root / year / month / day / site_part
     target_dir.mkdir(parents=True, exist_ok=True)
+    site_index_dir = archive_root / "by_site" / site_part / year / month / day
+    site_index_dir.mkdir(parents=True, exist_ok=True)
 
     base_name = f"{date_part}_{site_part}_{staff_part}_{work_part}_{type_part}_{digest[:10]}{ext.lower()}"
     target = target_dir / safe_part(base_name, f"attachment_{digest[:10]}{ext.lower()}")
     if not target.exists():
         shutil.copy2(source, target)
+    site_index_target = site_index_dir / target.name
+    if not site_index_target.exists():
+        shutil.copy2(target, site_index_target)
 
     return ArchivedFile(
         original_path=str(source),

@@ -78,10 +78,57 @@ class DatabaseTests(unittest.TestCase):
             self.assertEqual(db.list_download_jobs(), [])
 
             db.mark_message_done(stored["id"])
+            record_id = db.save_repair_record(
+                stored["id"],
+                {
+                    "work_date": "2026-06-10",
+                    "staff_name": "Kei",
+                    "site": "商场A",
+                    "work_type": "maintenance",
+                    "summary": "完成，附相",
+                    "completion_status": "已完成",
+                },
+            )
             jobs = db.list_download_jobs()
 
             self.assertEqual(len(jobs), 1)
             self.assertEqual(jobs[0]["message_fingerprint"], "j" * 64)
+            self.assertEqual(jobs[0]["site"], "商场A")
+            self.assertEqual(jobs[0]["staff_name"], "Kei")
+            self.assertEqual(jobs[0]["work_type"], "maintenance")
+            self.assertEqual(jobs[0]["work_date"], "2026-06-10")
+            self.assertIsInstance(record_id, int)
+
+    def test_download_jobs_skip_unknown_site(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db = Database(Path(temp_dir) / "test.db")
+            db.init()
+            message = {
+                "group_name": "维修群",
+                "sender": "Kei",
+                "sent_at": "2026-06-10T18:00:00+08:00",
+                "text": "完成，附相",
+                "message_fingerprint": "k" * 64,
+                "has_attachments": True,
+                "attachment_hints": [{"type": "image"}],
+                "raw_payload": {},
+            }
+            db.insert_messages([message])
+            stored = db.get_message_by_fingerprint("k" * 64)
+            db.save_repair_record(
+                stored["id"],
+                {
+                    "work_date": "2026-06-10",
+                    "staff_name": "Kei",
+                    "site": "",
+                    "work_type": "maintenance",
+                    "summary": "完成，附相",
+                    "completion_status": "已完成",
+                },
+            )
+            db.mark_message_done(stored["id"])
+
+            self.assertEqual(db.list_download_jobs(), [])
 
     def test_get_message_by_external_id(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -193,6 +240,152 @@ class DatabaseTests(unittest.TestCase):
             self.assertEqual(records[0]["next_actions"], ["提醒补充维修报告 PDF"])
             self.assertEqual(records[0]["whatsapp_sender"], "Casey")
             self.assertEqual(records[0]["whatsapp_text"], "商场C 已处理，维修报告 PDF 后补。")
+
+    def test_create_reminder_formats_ai_content_with_whatsapp_original(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db = Database(Path(temp_dir) / "test.db")
+            db.init()
+            message = {
+                "group_name": "维修群",
+                "sender": "Casey",
+                "sent_at": "2026-06-10 13:00",
+                "text": "商场C 已处理，维修报告 PDF 后补。",
+                "message_fingerprint": "r" * 64,
+                "has_attachments": False,
+                "attachment_hints": [],
+                "raw_payload": {},
+            }
+            db.insert_messages([message])
+            stored = db.get_message_by_fingerprint("r" * 64)
+            record_id = db.save_repair_record(
+                stored["id"],
+                {
+                    "work_date": "2026-06-10",
+                    "staff_name": "Casey",
+                    "site": "商场C",
+                    "summary": "维修报告 PDF 后补",
+                    "completion_status": "资料不足",
+                    "missing_items": ["维修报告 PDF"],
+                },
+            )
+
+            created = db.create_reminder_if_needed(
+                record_id,
+                {
+                    "staff_name": "Casey",
+                    "completion_status": "资料不足",
+                    "missing_items": ["维修报告 PDF"],
+                    "next_actions": [],
+                    "reminder_text": "@Casey 請補維修報告掃描",
+                    "whatsapp_text": "商场C 已处理，维修报告 PDF 后补。",
+                },
+            )
+
+            self.assertTrue(created)
+            reminder = db.list_pending_reminders()[0]
+            self.assertEqual(
+                reminder["content"],
+                "@Casey 請補維修報告掃描\n\n-------\n\n商场C 已处理，维修报告 PDF 后补。",
+            )
+
+    def test_create_reminder_skips_completed_and_plain_pending_review(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db = Database(Path(temp_dir) / "test.db")
+            db.init()
+            db.insert_messages([
+                {
+                    "group_name": "维修群",
+                    "sender": "Casey",
+                    "sent_at": "2026-06-10 13:00",
+                    "text": "完成",
+                    "message_fingerprint": "s" * 64,
+                    "has_attachments": False,
+                    "attachment_hints": [],
+                    "raw_payload": {},
+                },
+                {
+                    "group_name": "维修群",
+                    "sender": "Casey",
+                    "sent_at": "2026-06-10 14:00",
+                    "text": "待确认",
+                    "message_fingerprint": "t" * 64,
+                    "has_attachments": False,
+                    "attachment_hints": [],
+                    "raw_payload": {},
+                },
+            ])
+            first_message = db.get_message_by_fingerprint("s" * 64)
+            second_message = db.get_message_by_fingerprint("t" * 64)
+            first_id = db.save_repair_record(
+                first_message["id"],
+                {"staff_name": "Casey", "summary": "完成", "completion_status": "已完成"},
+            )
+            second_id = db.save_repair_record(
+                second_message["id"],
+                {"staff_name": "Casey", "summary": "待确认但无缺失", "completion_status": "待人工确认"},
+            )
+
+            self.assertFalse(
+                db.create_reminder_if_needed(
+                    first_id,
+                    {"staff_name": "Casey", "completion_status": "已完成", "missing_items": [], "next_actions": []},
+                )
+            )
+            self.assertFalse(
+                db.create_reminder_if_needed(
+                    second_id,
+                    {"staff_name": "Casey", "completion_status": "待人工确认", "missing_items": [], "next_actions": []},
+                )
+            )
+            self.assertEqual(db.list_pending_reminders(), [])
+
+    def test_create_reminder_deduplicates_same_pending_content(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db = Database(Path(temp_dir) / "test.db")
+            db.init()
+            db.insert_messages([
+                {
+                    "group_name": "维修群",
+                    "sender": "Casey",
+                    "sent_at": "2026-06-10 13:00",
+                    "text": "缺 PDF",
+                    "message_fingerprint": "u" * 64,
+                    "has_attachments": False,
+                    "attachment_hints": [],
+                    "raw_payload": {},
+                },
+                {
+                    "group_name": "维修群",
+                    "sender": "Casey",
+                    "sent_at": "2026-06-10 14:00",
+                    "text": "缺 PDF",
+                    "message_fingerprint": "v" * 64,
+                    "has_attachments": False,
+                    "attachment_hints": [],
+                    "raw_payload": {},
+                },
+            ])
+            first_message = db.get_message_by_fingerprint("u" * 64)
+            second_message = db.get_message_by_fingerprint("v" * 64)
+            first_id = db.save_repair_record(
+                first_message["id"],
+                {"staff_name": "Casey", "site": "商场C", "summary": "缺 PDF", "completion_status": "资料不足"},
+            )
+            second_id = db.save_repair_record(
+                second_message["id"],
+                {"staff_name": "Casey", "site": "商场C", "summary": "缺 PDF", "completion_status": "资料不足"},
+            )
+            analysis = {
+                "staff_name": "Casey",
+                "completion_status": "资料不足",
+                "missing_items": ["维修报告 PDF"],
+                "next_actions": [],
+                "reminder_text": "@Casey 請補維修報告掃描",
+            }
+
+            self.assertTrue(db.create_reminder_if_needed(first_id, analysis))
+            self.assertFalse(db.create_reminder_if_needed(second_id, analysis))
+            self.assertEqual(len(db.list_pending_reminders()), 1)
 
     def test_export_repair_records_normalizes_yingdao_sent_at_date(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -268,6 +268,25 @@ def loads(value: str | None, default: Any) -> Any:
         return default
 
 
+def _should_create_reminder(status: str, missing_items: list[Any], next_actions: list[Any]) -> bool:
+    normalized = str(status or "").strip()
+    if normalized == "已完成":
+        return False
+    if normalized in {"未回复", "未回覆", "资料不足", "資料不足", "需要跟进", "需要跟進"}:
+        return True
+    if normalized in {"待人工确认", "待人工確認"}:
+        return bool(missing_items or next_actions)
+    return False
+
+
+def _compose_reminder_content(base_content: str, whatsapp_text: Any) -> str:
+    content = str(base_content or "").strip()
+    original = str(whatsapp_text or "").strip()
+    if not original:
+        return content
+    return f"{content}\n\n-------\n\n{original}"
+
+
 class Database:
     def __init__(self, path: Path):
         self.path = Path(path)
@@ -577,19 +596,39 @@ class Database:
         with self.connect() as conn:
             rows = conn.execute(
                 """
-                SELECT rm.*
+                SELECT
+                    rm.*,
+                    rr.work_date AS repair_work_date,
+                    rr.staff_name AS repair_staff_name,
+                    rr.site AS repair_site,
+                    rr.work_type AS repair_work_type
                 FROM raw_messages rm
+                JOIN repair_records rr ON rr.raw_message_id = rm.id
                 WHERE rm.has_attachments = 1
                   AND rm.analysis_status = 'done'
+                  AND COALESCE(NULLIF(TRIM(rr.site), ''), '') != ''
                   AND NOT EXISTS (
                     SELECT 1 FROM attachments a WHERE a.raw_message_id = rm.id
                   )
+                GROUP BY rm.id
                 ORDER BY rm.sent_at ASC
                 LIMIT ?
                 """,
                 (limit,),
             ).fetchall()
-        return [self._message_row(row) for row in rows]
+        jobs = []
+        for row in rows:
+            data = dict(row)
+            repair = {
+                "work_date": data.pop("repair_work_date", None),
+                "staff_name": data.pop("repair_staff_name", None),
+                "site": data.pop("repair_site", None),
+                "work_type": data.pop("repair_work_type", None),
+            }
+            message = self._message_row(data)
+            message.update(repair)
+            jobs.append(message)
+        return jobs
 
     def list_recent_messages(self, limit: int = 50) -> list[dict[str, Any]]:
         with self.connect() as conn:
@@ -1921,12 +1960,14 @@ class Database:
 
     def create_reminder_if_needed(self, repair_record_id: int, analysis: dict[str, Any]) -> bool:
         missing_items = analysis.get("missing_items", []) or []
+        next_actions = analysis.get("next_actions", []) or []
         status = analysis.get("completion_status", "")
-        if not missing_items and status not in {"未回复", "未回覆", "资料不足", "資料不足", "需要跟进", "需要跟進"}:
+        if not _should_create_reminder(status, missing_items, next_actions):
             return False
         target = analysis.get("staff_name") or "相关同事"
-        reason = "、".join(missing_items) if missing_items else status
-        content = analysis.get("reminder_text") or f"@{target} 请补充：{reason}"
+        reason = "、".join(str(item) for item in missing_items) if missing_items else status
+        base_content = str(analysis.get("reminder_text") or f"@{target} 请补充：{reason}").strip()
+        content = _compose_reminder_content(base_content, analysis.get("whatsapp_text"))
         with self.connect() as conn:
             existing = conn.execute(
                 """
@@ -1937,6 +1978,19 @@ class Database:
                 (repair_record_id,),
             ).fetchone()
             if existing:
+                return False
+            duplicate = conn.execute(
+                """
+                SELECT id FROM reminders
+                WHERE target_name = ?
+                  AND reason = ?
+                  AND content = ?
+                  AND status IN ('pending', 'sent')
+                LIMIT 1
+                """,
+                (target, reason, content),
+            ).fetchone()
+            if duplicate:
                 return False
             conn.execute(
                 """
