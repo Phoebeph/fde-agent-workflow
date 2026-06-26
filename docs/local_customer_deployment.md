@@ -36,7 +36,6 @@ C:\Users\test\data\
 
 ```text
 DATA_ROOT=C:\Users\test\data
-FEISHU_MOCK_MODE=true
 AUTO_ANALYZE_ON_INGEST=true
 AUTO_EXPORT_ON_INGEST=true
 AUTO_PIPELINE_BACKGROUND=true
@@ -56,14 +55,14 @@ BACKUPS_ROOT=C:\Users\test\data\backups
 
 后端启动时会自动创建这些目录，客户电脑不需要手工逐个建立目录。
 
-即使不使用飞书，`FEISHU_MOCK_MODE=true` 仍可作为本地分析结果表使用，方便通过 `/api/mock/feishu/records` 查看 AI 输出。
+正式本地部署不需要配置飞书，也不需要开启 `FEISHU_MOCK_MODE`。维修记录以 `repair_records`、每日 Excel 和本地附件归档为准。
 
 自动流程开关说明：
 
 - `AUTO_ANALYZE_ON_INGEST=true`：影刀成功提交 WhatsApp 消息后，后端自动分析新消息。
 - `AUTO_EXPORT_ON_INGEST=true`：分析完成后，后端自动生成当天 Excel。
 - `AUTO_PIPELINE_BACKGROUND=true`：自动分析在后台执行，避免影刀等待 DeepSeek 返回太久。
-- `AUTO_SYNC_FEISHU_ON_INGEST=false`：本地部署不写飞书；后续重新接飞书时再改为 `true`。
+- `AUTO_SYNC_FEISHU_ON_INGEST=false`：本地部署不写飞书。
 
 ## 本地数据分工
 

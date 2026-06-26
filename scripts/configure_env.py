@@ -10,18 +10,16 @@ EXAMPLE_PATH = ROOT / ".env.example"
 
 SECRET_KEYS = {
     "DEEPSEEK_API_KEY",
-    "FEISHU_APP_SECRET",
 }
 
 PROMPTS = {
+    "DATA_ROOT": "Local data root directory",
     "DEEPSEEK_API_KEY": "DeepSeek API key",
-    "FEISHU_APP_ID": "Feishu App ID",
-    "FEISHU_APP_SECRET": "Feishu App Secret",
-    "FEISHU_APP_TOKEN": "Feishu Bitable App Token",
-    "FEISHU_TABLE_ID": "Feishu Bitable Table ID",
-    "FEISHU_UPLOAD_PARENT_NODE": "Feishu upload parent node token",
-    "FEISHU_MOCK_MODE": "Use mock Feishu sink (true/false)",
     "WHATSAPP_GROUP_NAME": "WhatsApp group name",
+    "AUTO_ANALYZE_ON_INGEST": "Analyze messages after Yingdao submit (true/false)",
+    "AUTO_EXPORT_ON_INGEST": "Export local Excel after analysis (true/false)",
+    "AUTO_PIPELINE_BACKGROUND": "Run analysis in background (true/false)",
+    "AUTO_SYNC_FEISHU_ON_INGEST": "Sync to Feishu after ingest (optional, normally false)",
     "DISPATCH_MANAGER_SENDERS": "Dispatch manager senders, comma-separated",
     "FOLLOWUP_MANAGER_SENDERS": "Follow-up manager senders, comma-separated",
 }

@@ -21,7 +21,7 @@ cd /Users/mac/Desktop/ai_projects/whatsapp
 .venv/bin/python scripts/check_config.py
 ```
 
-填写新生成的 DeepSeek key、飞书 App ID/App Secret、多维表格 app token 和 table ID。
+填写新生成的 DeepSeek key、WhatsApp 群名和本地数据目录。飞书不是必需项，正式本地部署保持 `AUTO_SYNC_FEISHU_ON_INGEST=false`。
 
 ## 3. 影刀流程：第一轮可见消息验证
 
@@ -103,20 +103,20 @@ curl 'http://127.0.0.1:8000/api/whatsapp/download-jobs?limit=10'
 - `archive/` 出现按规则重命名的附件。
 - `GET /api/status` 中 `attachments` 数量增加。
 
-## 7. 分析、飞书同步和提醒
+## 7. 分析、本地保存和提醒
 
-配置 DeepSeek 和飞书后运行：
+配置 DeepSeek 后运行：
 
 ```bash
 curl -X POST http://127.0.0.1:8000/api/analyze/run \
   -H 'Content-Type: application/json' \
-  -d '{"limit":20,"sync_feishu":true}'
+  -d '{"limit":20,"sync_feishu":false}'
 ```
 
 验收结果：
 
-- 飞书多维表格出现维修记录。
 - `repair_records` 数量增加。
+- 当天本地 Excel 生成或更新。
 - 缺资料记录会生成 `reminders`。
 
 也可以运行自动跟进：

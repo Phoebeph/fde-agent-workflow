@@ -1,12 +1,12 @@
 # Mock Pipeline
 
-本阶段 WhatsApp 和飞书使用 mock data，DeepSeek 保持真实可用：`.env` 里有 `DEEPSEEK_API_KEY` 时调用 DeepSeek，没有 key 时使用规则兜底。
+本阶段使用 mock WhatsApp 数据验证本地链路，DeepSeek 保持真实可用：`.env` 里有 `DEEPSEEK_API_KEY` 时调用 DeepSeek，没有 key 时使用规则兜底。
 
 ## 配置
 
 ```env
-FEISHU_MOCK_MODE=true
 WHATSAPP_GROUP_NAME=Mock维修工作群
+AUTO_SYNC_FEISHU_ON_INGEST=false
 ```
 
 不要在代码或文档里写真实 key。用本机交互脚本填写：
@@ -29,7 +29,7 @@ cd /Users/mac/Desktop/ai_projects/whatsapp
 ```bash
 curl http://127.0.0.1:8000/api/status
 curl 'http://127.0.0.1:8000/api/whatsapp/messages/recent?limit=10'
-curl http://127.0.0.1:8000/api/mock/feishu/records
+curl 'http://127.0.0.1:8000/api/runs/recent?limit=10'
 curl http://127.0.0.1:8000/api/reminders/pending
 ```
 
@@ -39,7 +39,7 @@ curl http://127.0.0.1:8000/api/reminders/pending
 
 1. 保存 raw WhatsApp 消息。
 2. 调用 DeepSeek 或规则兜底分析。
-3. 写入 mock 飞书记录。
+3. 写入本地维修记录。
 4. 生成提醒任务。
 
 ```bash
@@ -76,7 +76,7 @@ Body:
 ## 替换真实 API
 
 - WhatsApp：把 `fixtures/mock_whatsapp_messages.json` 换成影刀调用 `POST /api/whatsapp/messages`。
-- 飞书：把 `FEISHU_MOCK_MODE=false`，配置飞书 App 和多维表格参数。
+- 本地存储：保持 `AUTO_SYNC_FEISHU_ON_INGEST=false`，结果写入 SQLite、附件归档目录和每日 Excel。
 - DeepSeek：保持 `.env` 的 `DEEPSEEK_API_KEY`，无需改业务代码。
 
 ## 附件保存
@@ -115,4 +115,4 @@ curl -X POST http://127.0.0.1:8000/api/schedules/import \
 curl -X POST 'http://127.0.0.1:8000/api/schedules/check-unreplied?work_date=2026-06-10'
 ```
 
-未回复任务会写入维修记录、mock 飞书总汇记录，并生成提醒。
+未回复任务会写入本地维修记录，并生成提醒。

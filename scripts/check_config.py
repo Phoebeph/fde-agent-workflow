@@ -11,25 +11,19 @@ from app.config import settings
 
 
 REQUIRED_DEEPSEEK = ["DEEPSEEK_API_KEY"]
-REQUIRED_FEISHU = [
-    "FEISHU_APP_ID",
-    "FEISHU_APP_SECRET",
-    "FEISHU_APP_TOKEN",
-    "FEISHU_TABLE_ID",
-]
-
-
 def main() -> None:
     values = {
         "DEEPSEEK_API_KEY": settings.deepseek_api_key,
         "DEEPSEEK_BASE_URL": settings.deepseek_base_url,
         "DEEPSEEK_MODEL": settings.deepseek_model,
-        "FEISHU_APP_ID": settings.feishu_app_id,
-        "FEISHU_APP_SECRET": settings.feishu_app_secret,
-        "FEISHU_APP_TOKEN": settings.feishu_app_token,
-        "FEISHU_TABLE_ID": settings.feishu_table_id,
-        "FEISHU_UPLOAD_PARENT_NODE": settings.feishu_upload_parent_node,
-        "FEISHU_MOCK_MODE": str(settings.feishu_mock_mode),
+        "DATA_ROOT": str(settings.data_root),
+        "DATABASE_PATH": str(settings.database_path),
+        "ARCHIVE_ROOT": str(settings.archive_root),
+        "DOWNLOADS_ROOT": str(settings.downloads_root),
+        "EXPORTS_ROOT": str(settings.exports_root),
+        "AUTO_ANALYZE_ON_INGEST": str(settings.auto_analyze_on_ingest),
+        "AUTO_EXPORT_ON_INGEST": str(settings.auto_export_on_ingest),
+        "AUTO_SYNC_FEISHU_ON_INGEST": str(settings.auto_sync_feishu_on_ingest),
         "WHATSAPP_GROUP_NAME": settings.whatsapp_group_name,
         "DISPATCH_MANAGER_SENDERS": ",".join(settings.dispatch_manager_senders),
         "FOLLOWUP_MANAGER_SENDERS": ",".join(settings.followup_manager_senders),
@@ -38,14 +32,11 @@ def main() -> None:
         print(f"{key}={_redact(value)}")
 
     missing_deepseek = [key for key in REQUIRED_DEEPSEEK if not values[key]]
-    missing_feishu = [key for key in REQUIRED_FEISHU if not values[key]]
     print(f"deepseek_enabled={not missing_deepseek}")
-    print(f"feishu_enabled={not missing_feishu}")
-    print(f"feishu_sync_available={settings.feishu_sync_available}")
+    print(f"local_storage_enabled=True")
+    print(f"feishu_required=False")
     if missing_deepseek:
         print(f"missing_deepseek={','.join(missing_deepseek)}")
-    if missing_feishu:
-        print(f"missing_feishu={','.join(missing_feishu)}")
 
 
 def _redact(value: str) -> str:

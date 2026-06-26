@@ -1,6 +1,6 @@
 # WhatsApp Repair AI Backend
 
-本项目是维修 WhatsApp 群组 AI 工具的本地后端。影刀 RPA 负责操作 WhatsApp Web，本后端负责入库、附件归档、DeepSeek 分析、飞书多维表格同步和提醒任务管理。
+本项目是维修 WhatsApp 群组 AI 工具的本地后端。影刀 RPA 负责操作 WhatsApp Web，本后端负责入库、附件归档、DeepSeek 分析、本地 Excel 导出和提醒任务管理。
 
 ## Architecture
 
@@ -8,7 +8,7 @@
 影刀 RPA
   -> WhatsApp Web 抓消息/下载附件/发提醒
   -> 本地 FastAPI 后端
-  -> SQLite + 本地归档 + DeepSeek + 飞书多维表格
+  -> SQLite + 本地归档 + DeepSeek + 本地 Excel
 ```
 
 影刀只做网页自动化；复杂业务逻辑都在后端。
@@ -22,13 +22,17 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-编辑 `.env`，填入新的 DeepSeek key、飞书应用信息和 WhatsApp 群组名。不要把真实 key 写入代码、README 或提交记录。
+编辑 `.env`，填入新的 DeepSeek key、WhatsApp 群组名和本地数据目录。不要把真实 key 写入代码、README 或提交记录。
 
-如果当前阶段 WhatsApp 和飞书都使用 mock data，可以设置：
+客户电脑本地部署建议设置：
 
 ```env
-FEISHU_MOCK_MODE=true
-WHATSAPP_GROUP_NAME=Mock维修工作群
+DATA_ROOT=C:\Users\test\data
+WHATSAPP_GROUP_NAME=维修工作群
+AUTO_ANALYZE_ON_INGEST=true
+AUTO_EXPORT_ON_INGEST=true
+AUTO_PIPELINE_BACKGROUND=true
+AUTO_SYNC_FEISHU_ON_INGEST=false
 ```
 
 DeepSeek 仍然由 `DEEPSEEK_API_KEY` 控制；配置了 key 就调用真实 AI，没有 key 时使用规则兜底分析。
@@ -69,22 +73,29 @@ uvicorn app.main:app --host 127.0.0.1 --port 8000
 .venv/bin/python scripts/send_yingdao_payload.py fixtures/yingdao_today_messages_example.json
 ```
 
-## Feishu Integration
+## Local Storage
 
-使用飞书自建应用和多维表格：
+正式交付默认不需要飞书。维修记录和运行状态保存在 SQLite，附件按日期和地点归档到本地目录，并自动导出每日 Excel。
 
-- `FEISHU_APP_ID`
-- `FEISHU_APP_SECRET`
-- `FEISHU_APP_TOKEN`
-- `FEISHU_TABLE_ID`
+推荐目标电脑使用独立数据目录：
 
-后端会保存飞书 `record_id`，后续只更新同一条记录，避免重复创建。
-
-Mock 飞书模式会把记录写入 SQLite 的 `mock_feishu_records` 表，并生成 `mock_rec_...` record ID。查看 mock 记录：
-
-```bash
-curl http://127.0.0.1:8000/api/mock/feishu/records
+```env
+DATA_ROOT=C:\Users\test\data
 ```
+
+只配置 `DATA_ROOT` 时，后端会自动使用这些子目录：
+
+```text
+database\   SQLite 数据库
+downloads\  影刀临时下载目录
+logs\       后端和影刀日志
+backups\    数据库备份
+YYYY\MM\DD\ 按日期、地点归档附件和 Excel
+```
+
+更详细的客户电脑目录和打包部署建议见 `docs/local_customer_deployment.md`。
+
+飞书集成代码仍保留为可选能力；默认保持 `AUTO_SYNC_FEISHU_ON_INGEST=false`，不需要配置飞书参数。
 
 ## DeepSeek
 
@@ -106,16 +117,16 @@ downloads/ 影刀下载临时目录
 
 ## Mock Pipeline
 
-当前 WhatsApp 和飞书都可用 mock data 跑通：
+当前可以用 mock WhatsApp 消息跑通本地链路：
 
 ```bash
 cd /Users/mac/Desktop/ai_projects/whatsapp
 .venv/bin/python scripts/run_mock_pipeline.py
 curl http://127.0.0.1:8000/api/status
-curl http://127.0.0.1:8000/api/mock/feishu/records
+curl 'http://127.0.0.1:8000/api/runs/recent?limit=10'
 ```
 
-Mock 输入文件在 `fixtures/mock_whatsapp_messages.json`。后续接入影刀和飞书真实 API 时，保留同一套入库、分析和同步逻辑，只替换输入/输出通道。
+Mock 输入文件在 `fixtures/mock_whatsapp_messages.json`。后续在另一台已配置影刀的电脑上运行时，影刀直接调用同一套本地 HTTP 接口，不需要接飞书。
 
 影刀提交 WhatsApp 消息到 `POST /api/whatsapp/messages` 后，后端会自动从管理人员的高置信派工消息中生成任务。默认派工管理人员：
 
@@ -181,7 +192,7 @@ curl -X POST http://127.0.0.1:8000/api/schedules/import \
   --data-binary @fixtures/mock_daily_work_schedules.json
 ```
 
-发送单条模拟 WhatsApp 消息并自动执行入库、分析、mock 飞书同步和提醒生成：
+发送单条模拟 WhatsApp 消息并自动执行入库、分析、本地记录保存和提醒生成：
 
 ```bash
 .venv/bin/python scripts/send_mock_message.py "Sam" "商场L 工程部要求检查 panic alarm，已测试正常，但维修报告 PDF 后补。"
