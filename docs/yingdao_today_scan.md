@@ -189,8 +189,6 @@ Content-Type: application/json
 ```json
 {
   "external_message_id": "yingdao_xxxxx",
-  "original_filename": "report.pdf",
-  "temp_path": "/Users/mac/Desktop/ai_projects/whatsapp/downloads/report.pdf",
   "attachment_type": "pdf",
   "staff_name": "Brian",
   "site": "商场52",
@@ -198,6 +196,12 @@ Content-Type: application/json
   "work_date": "2026-06-13"
 }
 ```
+
+`original_filename` 和 `temp_path` 现在都可以省略。省略时，后端会：
+
+- 优先用 WhatsApp 消息发送日期和发送人生成默认图片文件名。
+- PDF 如果下载目录中的真实文件名可用，则保留原文件名；否则生成 `日期_发送人_pdf`。
+- 在 `DOWNLOADS_ROOT` 下递归扫描最新下载文件，并按消息日期和地点归档到最终目录。
 
 后端会把文件归档到：
 

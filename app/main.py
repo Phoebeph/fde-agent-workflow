@@ -77,6 +77,22 @@ ATTACHMENT_LABEL_TEXTS = {
     "換後",
     "换后",
 }
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".heic", ".heif"}
+PDF_EXTENSIONS = {".pdf"}
+VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v"}
+DOCUMENT_EXTENSIONS = PDF_EXTENSIONS | {".doc", ".docx", ".xls", ".xlsx", ".txt", ".csv", ".zip", ".rar"}
+GENERIC_DOWNLOAD_STEMS = {
+    "attachment",
+    "attachments",
+    "document",
+    "download",
+    "file",
+    "image",
+    "img",
+    "photo",
+    "scan",
+    "unknown",
+}
 
 
 def _validation_errors_for_log(exc: RequestValidationError) -> list[dict[str, object]]:
@@ -201,6 +217,75 @@ def _apply_site_mapping(analysis: dict[str, object], message: dict[str, object])
     if matched:
         mapped["site"] = matched["name"]
     return mapped
+
+
+def _allowed_attachment_extensions(attachment_type: str) -> set[str] | None:
+    if attachment_type == "image":
+        return IMAGE_EXTENSIONS
+    if attachment_type == "pdf":
+        return PDF_EXTENSIONS
+    if attachment_type == "video":
+        return VIDEO_EXTENSIONS
+    if attachment_type == "document":
+        return DOCUMENT_EXTENSIONS
+    return None
+
+
+def _find_latest_downloaded_attachment(downloads_root: Path, attachment_type: str) -> tuple[Path | None, int]:
+    allowed_extensions = _allowed_attachment_extensions(attachment_type)
+    candidates = [
+        path
+        for path in downloads_root.rglob("*")
+        if path.is_file() and (allowed_extensions is None or path.suffix.lower() in allowed_extensions)
+    ]
+    if not candidates:
+        return None, 0
+    candidates.sort(key=lambda path: (path.stat().st_mtime, str(path)), reverse=True)
+    return candidates[0], len(candidates)
+
+
+def _default_attachment_filename(
+    source_path: Path,
+    *,
+    attachment_type: str,
+    provided_filename: str | None,
+    work_date: str | None,
+    staff_name: str | None,
+) -> str:
+    ext = (source_path.suffix or Path(provided_filename or "").suffix or ".bin").lower()
+    date_part = safe_part(work_date, "unknown_date")
+    staff_part = safe_part(staff_name, "unknown_staff")
+    if attachment_type == "image":
+        return f"{date_part}_{staff_part}_image{ext}"
+
+    candidate = (provided_filename or "").strip()
+    if not candidate:
+        candidate = source_path.name
+    stem = Path(candidate).stem.strip().casefold()
+    if attachment_type == "pdf" and stem and stem not in GENERIC_DOWNLOAD_STEMS:
+        return candidate
+    if attachment_type == "pdf":
+        return f"{date_part}_{staff_part}_pdf{ext if ext else '.pdf'}"
+    if candidate:
+        return candidate
+    return f"{date_part}_{staff_part}_{safe_part(attachment_type, 'attachment')}{ext}"
+
+
+def _resolve_attachment_source_path(
+    payload: AttachmentIn,
+    *,
+    downloads_root: Path,
+) -> tuple[Path, str, int]:
+    if payload.temp_path:
+        source = Path(payload.temp_path).expanduser()
+        return source, "payload_temp_path", 1
+
+    source, candidate_count = _find_latest_downloaded_attachment(downloads_root, payload.attachment_type)
+    if source is None:
+        raise FileNotFoundError(
+            f"no attachment candidate found in downloads directory: {downloads_root}"
+        )
+    return source, "downloads_root_scan", candidate_count
 
 
 def _augment_analyses_with_configured_sites(
@@ -1302,15 +1387,6 @@ def ingest_attachment(
     payload: AttachmentIn,
     background_tasks: BackgroundTasks,
 ) -> dict[str, object]:
-    logger.info(
-        "attachment ingest received external_message_id=%s message_fingerprint=%s "
-        "original_filename=%s temp_path=%s attachment_type=%s",
-        payload.external_message_id,
-        payload.message_fingerprint,
-        payload.original_filename,
-        payload.temp_path,
-        payload.attachment_type,
-    )
     message = None
     if payload.message_fingerprint:
         message = db.get_message_by_fingerprint(payload.message_fingerprint)
@@ -1330,11 +1406,44 @@ def ingest_attachment(
     site = payload.site or matched_record.get("site")
     staff_name = payload.staff_name or matched_record.get("staff_name") or message["sender"]
     work_type = payload.work_type or matched_record.get("work_type")
+    logger.info(
+        "attachment ingest received external_message_id=%s message_fingerprint=%s "
+        "original_filename=%s temp_path=%s attachment_type=%s resolved_work_date=%s resolved_site=%s resolved_staff=%s",
+        payload.external_message_id,
+        payload.message_fingerprint,
+        payload.original_filename,
+        payload.temp_path,
+        payload.attachment_type,
+        work_date,
+        site,
+        staff_name,
+    )
     try:
+        source_path, source_strategy, candidate_count = _resolve_attachment_source_path(
+            payload,
+            downloads_root=settings.downloads_root,
+        )
+        original_filename = _default_attachment_filename(
+            source_path,
+            attachment_type=payload.attachment_type,
+            provided_filename=payload.original_filename,
+            work_date=str(work_date) if work_date else None,
+            staff_name=str(staff_name) if staff_name else None,
+        )
+        logger.info(
+            "attachment source resolved external_message_id=%s message_fingerprint=%s "
+            "strategy=%s candidates=%s source_path=%s original_filename=%s",
+            payload.external_message_id,
+            payload.message_fingerprint,
+            source_strategy,
+            candidate_count,
+            source_path,
+            original_filename,
+        )
         archived = archive_attachment(
-            payload.temp_path,
+            str(source_path),
             settings.archive_root,
-            original_filename=payload.original_filename,
+            original_filename=original_filename,
             work_date=str(work_date) if work_date else None,
             site=str(site) if site else None,
             staff_name=str(staff_name) if staff_name else None,
@@ -1344,10 +1453,11 @@ def ingest_attachment(
     except FileNotFoundError as exc:
         logger.warning(
             "attachment file not found external_message_id=%s message_fingerprint=%s "
-            "temp_path=%s detail=%s",
+            "temp_path=%s downloads_root=%s detail=%s",
             payload.external_message_id,
             payload.message_fingerprint,
             payload.temp_path,
+            settings.downloads_root,
             exc,
         )
         raise HTTPException(status_code=400, detail=str(exc)) from exc

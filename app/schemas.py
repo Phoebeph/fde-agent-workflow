@@ -146,8 +146,8 @@ class MockWhatsAppMessageIn(BaseModel):
 class AttachmentIn(BaseModel):
     message_fingerprint: str | None = Field(default=None, min_length=16)
     external_message_id: str | None = Field(default=None, min_length=1)
-    original_filename: str = Field(min_length=1)
-    temp_path: str = Field(min_length=1)
+    original_filename: str | None = Field(default=None, min_length=1)
+    temp_path: str | None = Field(default=None, min_length=1)
     attachment_type: Literal["image", "pdf", "video", "document", "other"] = "other"
     staff_name: str | None = None
     site: str | None = None

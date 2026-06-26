@@ -24,8 +24,6 @@ class AttachmentLoggingTests(unittest.TestCase):
 
             response = _validation_response(
                 {
-                    "external_message_id": "yingdao_missing_temp",
-                    "original_filename": "photo.jpg",
                     "attachment_type": "image",
                 },
             )
@@ -34,7 +32,7 @@ class AttachmentLoggingTests(unittest.TestCase):
             log_text = _read_log(log_path)
             self.assertIn("request validation failed status=422", log_text)
             self.assertIn("/api/whatsapp/attachments", log_text)
-            self.assertIn("temp_path", log_text)
+            self.assertIn("message_fingerprint or external_message_id is required", log_text)
 
     def test_attachment_invalid_type_is_written_to_backend_log(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -101,6 +99,69 @@ class AttachmentLoggingTests(unittest.TestCase):
             log_text = _read_log(log_path)
             self.assertIn("attachment message reference not found", log_text)
             self.assertIn("yingdao_unknown", log_text)
+
+    def test_attachment_without_temp_path_uses_latest_downloaded_image(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            log_path = _configure_test_logging(root)
+            downloads_root = root / "downloads"
+            downloads_root.mkdir(parents=True, exist_ok=True)
+            older = downloads_root / "older.jpg"
+            older.write_bytes(b"older-image")
+            newer = downloads_root / "latest.png"
+            newer.write_bytes(b"latest-image")
+            db = _database_with_attachment_message(root, "b" * 64, "yingdao_auto_image")
+
+            with (
+                patch("app.main.db", db),
+                patch("app.main.settings", _settings(root)),
+            ):
+                response = _call_ingest_attachment(
+                    {
+                        "external_message_id": "yingdao_auto_image",
+                        "attachment_type": "image",
+                    },
+                )
+
+            self.assertTrue(response["inserted"])
+            message = db.get_message_by_external_id("yingdao_auto_image")
+            attachments = db.list_attachments_for_message(message["id"])
+            self.assertEqual(len(attachments), 1)
+            self.assertEqual(attachments[0]["original_filename"], "2026-06-10_Kei_image.png")
+            self.assertIn("2026/06/10/unknown_site", attachments[0]["archive_path"])
+            self.assertTrue(Path(attachments[0]["archive_path"]).exists())
+            log_text = _read_log(log_path)
+            self.assertIn("strategy=downloads_root_scan", log_text)
+            self.assertIn(str(newer), log_text)
+
+    def test_attachment_pdf_preserves_real_source_filename_when_temp_path_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            log_path = _configure_test_logging(root)
+            downloads_root = root / "downloads" / "yingdao"
+            downloads_root.mkdir(parents=True, exist_ok=True)
+            source = downloads_root / "service_report_final.PDF"
+            source.write_bytes(b"pdf-bytes")
+            db = _database_with_attachment_message(root, "c" * 64, "yingdao_auto_pdf")
+
+            with (
+                patch("app.main.db", db),
+                patch("app.main.settings", _settings(root)),
+            ):
+                response = _call_ingest_attachment(
+                    {
+                        "external_message_id": "yingdao_auto_pdf",
+                        "attachment_type": "pdf",
+                    },
+                )
+
+            self.assertTrue(response["inserted"])
+            message = db.get_message_by_external_id("yingdao_auto_pdf")
+            attachments = db.list_attachments_for_message(message["id"])
+            self.assertEqual(attachments[0]["original_filename"], "service_report_final.PDF")
+            self.assertTrue(attachments[0]["archive_filename"].endswith(".pdf"))
+            log_text = _read_log(log_path)
+            self.assertIn("original_filename=service_report_final.PDF", log_text)
 
 
 def _configure_test_logging(root: Path) -> Path:

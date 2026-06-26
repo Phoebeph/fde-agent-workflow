@@ -94,14 +94,14 @@ class SchemaTests(unittest.TestCase):
         payload = AttachmentIn.model_validate(
             {
                 "external_message_id": "yingdao_abc",
-                "original_filename": "photo.jpg",
-                "temp_path": "C:/Users/test/data/downloads/yingdao/photo.jpg",
                 "attachment_type": "image",
             }
         )
 
         self.assertEqual(payload.external_message_id, "yingdao_abc")
         self.assertIsNone(payload.message_fingerprint)
+        self.assertIsNone(payload.original_filename)
+        self.assertIsNone(payload.temp_path)
 
     def test_attachment_requires_message_reference(self) -> None:
         with self.assertRaises(ValidationError):

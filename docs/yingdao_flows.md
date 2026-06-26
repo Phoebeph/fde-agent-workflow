@@ -122,8 +122,6 @@ Body:
 ```json
 {
   "message_fingerprint": "sha256-from-download-job",
-  "original_filename": "report.pdf",
-  "temp_path": "/Users/mac/Desktop/ai_projects/whatsapp/downloads/report.pdf",
   "attachment_type": "pdf",
   "staff_name": "Kei",
   "site": "商场LY",
@@ -131,6 +129,8 @@ Body:
   "work_date": "2026-06-10"
 }
 ```
+
+`original_filename` 和 `temp_path` 可选；后端会在下载目录中自动定位最新匹配文件，并为图片/PDF 生成或保留合适的原始文件名。
 
 附件扫描和附件下载分两步：扫描阶段只提交 `has_attachments` 和 `attachment_hints`，下载阶段再按 `message_fingerprint` 找回 WhatsApp 消息并下载文件。
 
