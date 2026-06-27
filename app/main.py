@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import logging
 from pathlib import Path
 import re
@@ -20,6 +20,7 @@ from app.logging_config import configure_backend_logging
 from app.schemas import (
     AnalyzeRunIn,
     AnalyzeResetIn,
+    AutomationReportIn,
     AttachmentIn,
     IssueConvertIn,
     IssueDecisionIn,
@@ -36,8 +37,9 @@ from app.schemas import (
     WhatsAppMessageBatchIn,
 )
 from app.services.archive import archive_attachment, safe_part
+from app.services.automation import SCAN_CYCLE, STALE_CLAIM_SECONDS, build_due_automation_jobs, parse_site_names_csv
 from app.services.completion import apply_schedule_completion, schedule_gap_analysis
-from app.services.customer_config import CustomerSettings, load_customer_settings
+from app.services.customer_config import CustomerSettings, CustomerSettingsStore
 from app.services.diagnostics import build_location_coverage_report, infer_location_from_item
 from app.services.deepseek import DeepSeekClient, DeepSeekError, rule_based_analysis, split_work_item_text
 from app.services.dispatch import discover_dispatch_schedules, followup_tracking_to_event
@@ -54,7 +56,8 @@ logger = logging.getLogger("app.main")
 db = Database(settings.database_path)
 DOWNLOADS_DIR = settings.downloads_root
 AUTO_PIPELINE_LOCK = threading.Lock()
-CUSTOMER_SETTINGS: CustomerSettings = load_customer_settings(settings.customer_settings_path)
+CUSTOMER_SETTINGS_STORE = CustomerSettingsStore(settings.customer_settings_path)
+CUSTOMER_SETTINGS: CustomerSettings = CUSTOMER_SETTINGS_STORE.get()
 AUTOMATION_NOTICE_MARKERS = ("自动化助手提示",)
 ATTACHMENT_LABEL_TEXTS = {
     "前",
@@ -93,6 +96,76 @@ GENERIC_DOWNLOAD_STEMS = {
     "scan",
     "unknown",
 }
+
+
+def _current_customer_settings() -> CustomerSettings:
+    global CUSTOMER_SETTINGS
+    current, changed = CUSTOMER_SETTINGS_STORE.refresh()
+    CUSTOMER_SETTINGS = current
+    if changed:
+        _sync_customer_settings_to_database(current)
+    return current
+
+
+def _customer_settings_public_dict(current: CustomerSettings) -> dict[str, object]:
+    return {
+        "path": current.path or str(settings.customer_settings_path),
+        "loaded": current.loaded,
+        "error": current.error,
+        "validation_errors": current.validation_errors,
+        "timezone": current.timezone,
+        "whatsapp": {
+            "use_current_logged_in_account": current.whatsapp.use_current_logged_in_account,
+            "global_scan_lock_enabled": current.whatsapp.global_scan_lock_enabled,
+            "watch_groups": current.whatsapp.watch_groups,
+            "reminder_sender_account": current.whatsapp.reminder_sender_account,
+            "scan_interval_minutes": current.whatsapp.scan_interval_minutes,
+            "reminder_interval_minutes": current.whatsapp.reminder_interval_minutes,
+            "groups": [
+                {
+                    "id": group.id,
+                    "name": group.name,
+                    "enabled": group.enabled,
+                    "scan": {
+                        "enabled": group.scan.enabled,
+                        "interval_minutes": group.scan.interval_minutes,
+                        "start_offset_seconds": group.scan.start_offset_seconds,
+                        "skip_if_previous_scan_running": group.scan.skip_if_previous_scan_running,
+                    },
+                    "reminder": {
+                        "enabled": group.reminder.enabled,
+                        "days_of_week": group.reminder.days_of_week,
+                        "times": group.reminder.times,
+                        "max_reminders_per_event_per_day": group.reminder.max_reminders_per_event_per_day,
+                        "skip_completed_events": group.reminder.skip_completed_events,
+                    },
+                    "related_site_ids": group.related_site_ids,
+                    "related_site_names": current.related_site_names(group),
+                }
+                for group in current.whatsapp.groups
+            ],
+        },
+        "sites": [
+            {
+                "id": site.id,
+                "name": site.name,
+                "aliases": site.aliases,
+                "enabled": site.enabled,
+            }
+            for site in current.sites
+        ],
+        "event_rules": {
+            "completed_keywords": current.event_rules.completed_keywords,
+            "pending_keywords": current.event_rules.pending_keywords,
+        },
+        "photo_record_rules": {
+            "enabled": current.photo_record_rules.enabled,
+            "require_photo_for_quotation": current.photo_record_rules.require_photo_for_quotation,
+            "require_photo_for_replacement": current.photo_record_rules.require_photo_for_replacement,
+            "require_pdf_report_for_atal_material": current.photo_record_rules.require_pdf_report_for_atal_material,
+            "required_photo_types": current.photo_record_rules.required_photo_types,
+        },
+    }
 
 
 def _validation_errors_for_log(exc: RequestValidationError) -> list[dict[str, object]]:
@@ -339,10 +412,11 @@ def _ensure_local_directories() -> None:
         path.mkdir(parents=True, exist_ok=True)
 
 
-def _sync_customer_settings_to_database() -> None:
-    if not CUSTOMER_SETTINGS.loaded or CUSTOMER_SETTINGS.error:
+def _sync_customer_settings_to_database(current: CustomerSettings | None = None) -> None:
+    current = current or CUSTOMER_SETTINGS
+    if not current.loaded or current.error:
         return
-    for site in CUSTOMER_SETTINGS.sites:
+    for site in current.sites:
         db.upsert_site_config(
             {
                 "name": site.name,
@@ -354,7 +428,8 @@ def _sync_customer_settings_to_database() -> None:
 
 
 def _group_is_watched(group_name: str) -> bool:
-    watched = CUSTOMER_SETTINGS.whatsapp.watch_groups if CUSTOMER_SETTINGS.loaded and not CUSTOMER_SETTINGS.error else []
+    current = _current_customer_settings()
+    watched = current.whatsapp.watch_groups if current.loaded and not current.error else []
     if not watched:
         return True
     normalized = group_name.strip().casefold()
@@ -362,10 +437,11 @@ def _group_is_watched(group_name: str) -> bool:
 
 
 def _match_enabled_customer_site(text: str) -> str:
-    if not CUSTOMER_SETTINGS.loaded or CUSTOMER_SETTINGS.error:
+    current = _current_customer_settings()
+    if not current.loaded or current.error:
         return ""
     normalized = str(text or "").casefold()
-    for site in CUSTOMER_SETTINGS.sites:
+    for site in current.sites:
         if not site.enabled:
             continue
         candidates = [site.name, *site.aliases]
@@ -375,10 +451,11 @@ def _match_enabled_customer_site(text: str) -> str:
 
 
 def _site_is_watched_for_reminder(analysis: dict[str, object]) -> bool:
+    current = _current_customer_settings()
     enabled_sites = [
         site
-        for site in CUSTOMER_SETTINGS.sites
-        if CUSTOMER_SETTINGS.loaded and not CUSTOMER_SETTINGS.error and site.enabled
+        for site in current.sites
+        if current.loaded and not current.error and site.enabled
     ]
     if not enabled_sites:
         return True
@@ -387,6 +464,39 @@ def _site_is_watched_for_reminder(analysis: dict[str, object]) -> bool:
         for key in ("site", "summary", "result", "whatsapp_text")
     )
     return bool(_match_enabled_customer_site(text))
+
+
+def _ensure_due_automation_jobs() -> CustomerSettings:
+    current = _current_customer_settings()
+    if current.loaded and not current.error:
+        db.upsert_automation_jobs(build_due_automation_jobs(current))
+    stale_before = (
+        datetime.now(timezone.utc).replace(microsecond=0) - timedelta(seconds=STALE_CLAIM_SECONDS)
+    ).isoformat()
+    db.mark_stale_automation_runs(stale_before)
+    return current
+
+
+def _claim_next_automation_job() -> dict[str, object] | None:
+    current = _ensure_due_automation_jobs()
+    if not current.loaded or current.error:
+        return None
+    groups_by_id = {group.id: group for group in current.whatsapp.groups}
+    scan_locked = current.whatsapp.global_scan_lock_enabled and db.has_claimed_scan_run()
+    for candidate in db.list_automation_run_candidates(limit=50):
+        group = groups_by_id.get(str(candidate.get("group_id") or ""))
+        if group is None or not group.enabled:
+            continue
+        if candidate.get("job_type") == SCAN_CYCLE:
+            if scan_locked:
+                continue
+            if group.scan.skip_if_previous_scan_running and db.has_claimed_scan_run_for_group(group.id):
+                continue
+        run_token = uuid.uuid4().hex
+        claimed = db.claim_automation_run(int(candidate["id"]), run_token)
+        if claimed:
+            return claimed
+    return None
 
 
 def _parse_message_sent_at(value: object) -> datetime | None:
@@ -814,14 +924,14 @@ def _repair_record_followup_analysis(record: dict[str, object]) -> dict[str, obj
     return analysis
 
 
-def _run_auto_followups(work_date: str, limit: int) -> dict[str, object]:
+def _run_auto_followups(work_date: str, limit: int, site_names: list[str] | None = None) -> dict[str, object]:
     feishu = feishu_client()
     schedule_records = []
     existing_record_items = []
     reminders_created = 0
     feishu_synced = 0
 
-    schedules = db.list_schedules_without_repair_records(work_date, limit)
+    schedules = db.list_schedules_without_repair_records(work_date, limit, site_names=site_names)
     for schedule in schedules:
         item = _sync_schedule_gap(schedule, feishu)
         if item.get("mock_feishu_record_id"):
@@ -832,7 +942,7 @@ def _run_auto_followups(work_date: str, limit: int) -> dict[str, object]:
 
     remaining_limit = max(0, limit - len(schedules))
     repair_records = (
-        db.list_repair_records_needing_followup(work_date=work_date, limit=remaining_limit)
+        db.list_repair_records_needing_followup(work_date=work_date, limit=remaining_limit, site_names=site_names)
         if remaining_limit
         else []
     )
@@ -862,6 +972,7 @@ def _run_auto_followups(work_date: str, limit: int) -> dict[str, object]:
 
     return {
         "work_date": work_date,
+        "site_names": site_names or [],
         "checked_schedules": len(schedules),
         "checked_repair_records": len(repair_records),
         "reminders_created": reminders_created,
@@ -1079,11 +1190,12 @@ def startup() -> None:
     log_path = configure_backend_logging(settings.logs_root)
     logger.info("backend startup log_path=%s", log_path)
     db.init()
-    _sync_customer_settings_to_database()
+    _sync_customer_settings_to_database(_current_customer_settings())
 
 
 @app.get("/health")
 def health() -> dict[str, object]:
+    current = _current_customer_settings()
     return {
         "ok": True,
         "database": str(settings.database_path),
@@ -1092,39 +1204,75 @@ def health() -> dict[str, object]:
         "feishu_mock_mode": settings.feishu_mock_mode,
         "feishu_sync_available": settings.feishu_sync_available,
         "customer_settings": {
-            "path": str(settings.customer_settings_path),
-            "loaded": CUSTOMER_SETTINGS.loaded,
-            "error": CUSTOMER_SETTINGS.error,
-            "watch_groups": CUSTOMER_SETTINGS.whatsapp.watch_groups,
-            "reminder_sender_account": CUSTOMER_SETTINGS.whatsapp.reminder_sender_account,
-            "scan_interval_minutes": CUSTOMER_SETTINGS.whatsapp.scan_interval_minutes,
-            "reminder_interval_minutes": CUSTOMER_SETTINGS.whatsapp.reminder_interval_minutes,
-            "sites_count": len(CUSTOMER_SETTINGS.sites),
+            "path": current.path or str(settings.customer_settings_path),
+            "loaded": current.loaded,
+            "error": current.error,
+            "watch_groups": current.whatsapp.watch_groups,
+            "reminder_sender_account": current.whatsapp.reminder_sender_account,
+            "scan_interval_minutes": current.whatsapp.scan_interval_minutes,
+            "reminder_interval_minutes": current.whatsapp.reminder_interval_minutes,
+            "sites_count": len(current.sites),
+            "groups_count": len(current.whatsapp.groups),
         },
     }
 
 
 @app.get("/api/config/customer")
 def customer_config() -> dict[str, object]:
+    return _customer_settings_public_dict(_current_customer_settings())
+
+
+@app.get("/api/automation/next")
+def next_automation_job() -> dict[str, object]:
+    current = _current_customer_settings()
+    if not current.loaded:
+        return {
+            "job": None,
+            "config": {
+                "loaded": current.loaded,
+                "error": current.error,
+                "validation_errors": current.validation_errors,
+            },
+        }
+    job = _claim_next_automation_job()
+    if not job:
+        return {
+            "job": None,
+            "config": {
+                "loaded": current.loaded,
+                "timezone": current.timezone,
+                "watch_groups": current.whatsapp.watch_groups,
+            },
+        }
     return {
-        "path": str(settings.customer_settings_path),
-        "loaded": CUSTOMER_SETTINGS.loaded,
-        "error": CUSTOMER_SETTINGS.error,
-        "whatsapp": {
-            "watch_groups": CUSTOMER_SETTINGS.whatsapp.watch_groups,
-            "reminder_sender_account": CUSTOMER_SETTINGS.whatsapp.reminder_sender_account,
-            "scan_interval_minutes": CUSTOMER_SETTINGS.whatsapp.scan_interval_minutes,
-            "reminder_interval_minutes": CUSTOMER_SETTINGS.whatsapp.reminder_interval_minutes,
-        },
-        "sites": [
-            {
-                "name": site.name,
-                "aliases": site.aliases,
-                "enabled": site.enabled,
-            }
-            for site in CUSTOMER_SETTINGS.sites
-        ],
+        "job": {
+            "run_token": job.get("run_token"),
+            "job_type": job.get("job_type"),
+            "group_id": job.get("group_id"),
+            "group_name": job.get("group_name"),
+            "scheduled_for": job.get("scheduled_for"),
+            "timezone": job.get("timezone"),
+            "site_names": job.get("site_names", []),
+            "actions": job.get("actions", []),
+            "skip_if_previous_scan_running": job.get("skip_if_previous_scan_running", True),
+            "max_reminders_per_event_per_day": job.get("max_reminders_per_event_per_day", 1),
+            "skip_completed_events": job.get("skip_completed_events", True),
+            "reminder_sender_account": current.whatsapp.reminder_sender_account,
+        }
     }
+
+
+@app.post("/api/automation/report")
+def automation_report(payload: AutomationReportIn) -> dict[str, bool]:
+    saved = db.save_automation_run_result(
+        run_token=payload.run_token,
+        status=payload.status,
+        result_payload=payload.result_payload,
+        error_summary=payload.error_summary,
+    )
+    if not saved:
+        raise HTTPException(status_code=404, detail="automation run token not found")
+    return {"ok": True}
 
 
 @app.get("/admin/settings", response_class=HTMLResponse)
@@ -1401,9 +1549,12 @@ def ingest_mock_whatsapp_message(payload: MockWhatsAppMessageIn) -> dict[str, ob
 
 
 @app.get("/api/whatsapp/download-jobs")
-def whatsapp_download_jobs(limit: int = Query(default=50, ge=1, le=500)) -> dict[str, object]:
+def whatsapp_download_jobs(
+    limit: int = Query(default=50, ge=1, le=500),
+    group_name: str | None = Query(default=None),
+) -> dict[str, object]:
     jobs = []
-    for job in db.list_download_jobs(limit):
+    for job in db.list_download_jobs(limit, group_name=group_name):
         work_date = _export_date_from_sent_at(str(job.get("sent_at") or "")) or str(job.get("work_date") or "")
         site = str(job.get("site") or "unknown_site")
         job["suggested_download_dir"] = str(
@@ -1631,11 +1782,13 @@ def check_unreplied_schedules(work_date: str = Query(min_length=10), limit: int 
 def run_followups(
     work_date: str | None = Query(default=None, min_length=10),
     limit: int = Query(default=100, ge=1, le=500),
+    site_names: str | None = Query(default=None),
 ) -> dict[str, object]:
     target_date = work_date or datetime.now().strftime("%Y-%m-%d")
+    parsed_site_names = parse_site_names_csv(site_names)
     run_id = f"run_{uuid.uuid4().hex[:16]}"
     try:
-        result = _run_auto_followups(target_date, limit)
+        result = _run_auto_followups(target_date, limit, site_names=parsed_site_names)
         db.save_run_record(
             {
                 "run_id": run_id,
@@ -1684,8 +1837,11 @@ def cleanup_label_records() -> dict[str, object]:
 
 
 @app.get("/api/reminders/pending")
-def pending_reminders(limit: int = Query(default=50, ge=1, le=500)) -> dict[str, object]:
-    return {"reminders": db.list_pending_reminders(limit)}
+def pending_reminders(
+    limit: int = Query(default=50, ge=1, le=500),
+    site_names: str | None = Query(default=None),
+) -> dict[str, object]:
+    return {"reminders": db.list_pending_reminders(limit, parse_site_names_csv(site_names))}
 
 
 @app.post("/api/reminders/preview")

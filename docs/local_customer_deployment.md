@@ -42,6 +42,12 @@ AUTO_PIPELINE_BACKGROUND=true
 AUTO_SYNC_FEISHU_ON_INGEST=false
 ```
 
+影刀统一入口命令也建议放在 `.env`：
+
+```text
+YINGDAO_ENTRY_COMMAND="C:\Path\To\YingdaoRunner.exe" run "whatsapp_automation_entry"
+```
+
 如果只配置 `DATA_ROOT`，后端会自动使用：
 
 ```text
@@ -62,6 +68,25 @@ C:\Users\test\data\logs\backend.log
 ```
 
 如果附件同步失败，优先查看 `backend.log`。常见记录包括附件接口 422 字段校验错误、400 本地文件不存在、404 消息引用找不到，以及未捕获异常堆栈。影刀流程自己的操作日志仍建议写入 `yingdao.log`。
+
+## customer_settings.json
+
+客户业务调度配置统一使用：
+
+```text
+config\customer_settings.json
+```
+
+该文件现在是正式配置源，不再只是示例。后端会在每次相关请求时自动检查文件变更并热刷新，不需要重启进程。
+
+关键字段：
+
+- `timezone`：调度时区。
+- `whatsapp.global_scan_lock_enabled`：同一时刻只允许一个扫描任务被影刀领取。
+- `whatsapp.groups[].scan`：群扫描时间槽。
+- `whatsapp.groups[].reminder`：群提醒时间槽。
+- `whatsapp.groups[].related_site_ids`：该群 reminder job 只处理这些地点。
+- `sites[]`：地点标准名和别名。
 
 正式本地部署不需要配置飞书，也不需要开启 `FEISHU_MOCK_MODE`。维修记录以 `repair_records`、每日 Excel 和本地附件归档为准。
 
@@ -137,7 +162,28 @@ http://127.0.0.1:8000/admin/settings
 
 分析时后端会优先使用地点词库补全 `site`，并在 DeepSeek 漏拆时按命中的地点补维修记录。
 
-### 1. 采集 WhatsApp 消息
+### 1. 统一入口流
+
+正式运行不再让影刀自己判断时间，而是每次只执行一个轻量入口流：
+
+1. 调 `GET /api/automation/next`
+2. 如果 `job=null`，立即退出
+3. 如果是 `scan_cycle`，打开指定群，执行消息采集和附件下载
+4. 如果是 `reminder_cycle`，按该群关联地点执行 followups、拉提醒、发提醒
+5. 调 `POST /api/automation/report`
+
+后端返回的 job 至少包含：
+
+- `run_token`
+- `job_type`
+- `group_id`
+- `group_name`
+- `scheduled_for`
+- `timezone`
+- `site_names`
+- `actions`
+
+### 2. 采集 WhatsApp 消息
 
 影刀读取维修群当天消息，调用：
 
@@ -157,7 +203,7 @@ POST /api/whatsapp/messages
 }
 ```
 
-### 2. 自动 AI 分析和导出
+### 3. 自动 AI 分析和导出
 
 影刀成功调用 `POST /api/whatsapp/messages` 后，后端会自动：
 
@@ -174,12 +220,12 @@ POST /api/analyze/run
 POST /api/exports/daily?work_date=2026-06-19
 ```
 
-### 3. 下载附件
+### 4. 下载附件
 
 影刀获取待下载任务：
 
 ```http
-GET /api/whatsapp/download-jobs?limit=50
+GET /api/whatsapp/download-jobs?limit=50&group_name=维修工作群
 ```
 
 下载到 `downloads/yingdao/` 后，逐个回传：
@@ -204,7 +250,7 @@ DATA_ROOT\年\月\日\地点\
 C:\Users\test\data\2026\06\19\The_SOUI\2026-06-19_The_SOUI_num5_maintenance_image_xxxxx.jpg
 ```
 
-### 4. 查看每日 Excel
+### 5. 查看每日 Excel
 
 消息分析完成、附件回传完成后，后端会自动生成或更新：
 
@@ -213,18 +259,49 @@ C:\Users\test\data\2026\06\19\2026-06-19_维修与提醒总表.xlsx
 C:\Users\test\data\2026\06\19\The_SOUI\2026-06-19_The_SOUI_维修与提醒表.xlsx
 ```
 
-### 5. 发送提醒
+### 6. 发送提醒
 
 后端生成提醒后，影刀读取：
 
 ```http
-GET /api/reminders/pending?limit=20
+GET /api/reminders/pending?limit=20&site_names=淺水灣,LPP
 ```
 
 影刀用客户 WhatsApp 账号把 `content` 发回群里，发送成功后调用：
 
 ```http
 POST /api/reminders/result
+```
+
+提醒 job 的标准执行顺序固定为：
+
+1. `POST /api/followups/run?work_date=YYYY-MM-DD&site_names=...`
+2. `GET /api/reminders/pending?site_names=...`
+3. 逐条发送后 `POST /api/reminders/result`
+4. 最后 `POST /api/automation/report`
+
+## Windows 计划任务
+
+推荐两个计划任务：
+
+### 任务 A：后端常驻
+
+- 触发器：开机或用户登录时
+- 程序：`cmd.exe`
+- 参数：`/c C:\AI-Repair-system\app\scripts\start_backend.bat`
+
+### 任务 B：影刀轻量轮询
+
+- 触发器：每 1 分钟一次
+- 程序：`cmd.exe`
+- 参数：`/c C:\AI-Repair-system\app\scripts\run_yingdao_poll.bat`
+
+`run_yingdao_poll.bat` 会先校验 `YINGDAO_ENTRY_COMMAND`，然后启动影刀入口流。因为入口流无任务即退出，所以高频拉起不会造成明显负担。
+
+部署验收前建议运行：
+
+```text
+python scripts\check_config.py --mode all
 ```
 
 ## 备份建议

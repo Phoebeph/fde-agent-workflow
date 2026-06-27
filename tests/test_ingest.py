@@ -148,7 +148,7 @@ class IngestTests(unittest.TestCase):
             loaded=True,
         )
 
-        with patch("app.main.CUSTOMER_SETTINGS", customer_settings):
+        with patch("app.main._current_customer_settings", return_value=customer_settings):
             result = ingest_whatsapp_messages(payload, background_tasks=object())
 
         self.assertEqual(result["messages"], {"inserted": 0, "skipped": 0, "filtered": 1})
@@ -159,13 +159,13 @@ class IngestTests(unittest.TestCase):
         customer_settings = CustomerSettings(
             whatsapp=CustomerWhatsAppConfig(watch_groups=["test"]),
             sites=[
-                CustomerSite(name="淺水灣", aliases=["浅水湾", "Repulse Bay"], enabled=True),
-                CustomerSite(name="无关地点", aliases=["ignore"], enabled=False),
+                CustomerSite(id="site_repulse_bay", name="淺水灣", aliases=["浅水湾", "Repulse Bay"], enabled=True),
+                CustomerSite(id="site_ignore", name="无关地点", aliases=["ignore"], enabled=False),
             ],
             loaded=True,
         )
 
-        with patch("app.main.CUSTOMER_SETTINGS", customer_settings):
+        with patch("app.main._current_customer_settings", return_value=customer_settings):
             self.assertTrue(_site_is_watched_for_reminder({"site": "Repulse Bay", "summary": ""}))
             self.assertFalse(_site_is_watched_for_reminder({"site": "无关地点", "summary": ""}))
             self.assertFalse(_site_is_watched_for_reminder({"site": "其他地方", "summary": "需要跟进"}))

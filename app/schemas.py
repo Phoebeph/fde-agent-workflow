@@ -195,6 +195,21 @@ class ReminderResultIn(BaseModel):
     result_payload: dict[str, Any] = Field(default_factory=dict)
 
 
+class AutomationReportIn(BaseModel):
+    run_token: str = Field(min_length=8)
+    status: Literal["success", "failed", "skipped"]
+    error_summary: str = ""
+    result_payload: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("run_token")
+    @classmethod
+    def strip_run_token(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("run_token cannot be blank")
+        return stripped
+
+
 class ReminderPreviewIn(BaseModel):
     mention_name: str | None = ""
     assignee: str | None = ""

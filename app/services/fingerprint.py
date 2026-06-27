@@ -23,13 +23,13 @@ def message_fingerprint(
     external_message_id: str | None = None,
     attachment_hints: list[dict[str, Any]] | None = None,
 ) -> str:
+    del attachment_hints
     payload = {
         "group_name": normalize_text(group_name),
         "sender": normalize_text(sender),
         "sent_at": normalize_text(sent_at),
         "text": normalize_text(text),
         "external_message_id": normalize_text(external_message_id),
-        "attachment_hints": attachment_hints or [],
     }
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()

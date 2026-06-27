@@ -25,6 +25,24 @@ class FingerprintTests(unittest.TestCase):
         self.assertEqual(first, second)
         self.assertEqual(len(first), 64)
 
+    def test_message_fingerprint_ignores_attachment_hint_changes(self) -> None:
+        first = message_fingerprint(
+            "维修群",
+            "Kei",
+            "2026-06-10 18:00",
+            "商场LY 例检完成",
+            attachment_hints=[{"type": "image", "label": "Photo"}],
+        )
+        second = message_fingerprint(
+            "维修群",
+            "Kei",
+            "2026-06-10 18:00",
+            "商场LY 例检完成",
+            attachment_hints=[{"type": "image", "label": "Image"}, {"type": "pdf", "label": "PDF"}],
+        )
+
+        self.assertEqual(first, second)
+
 
 if __name__ == "__main__":
     unittest.main()

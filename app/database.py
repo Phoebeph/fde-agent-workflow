@@ -184,6 +184,33 @@ CREATE INDEX IF NOT EXISTS idx_run_records_created_at ON run_records(created_at)
 CREATE INDEX IF NOT EXISTS idx_run_records_run_type ON run_records(run_type);
 CREATE INDEX IF NOT EXISTS idx_run_records_status ON run_records(status);
 
+CREATE TABLE IF NOT EXISTS automation_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    group_id TEXT NOT NULL,
+    group_name TEXT NOT NULL,
+    job_type TEXT NOT NULL,
+    scheduled_for TEXT NOT NULL,
+    timezone TEXT NOT NULL,
+    site_names_json TEXT NOT NULL DEFAULT '[]',
+    actions_json TEXT NOT NULL DEFAULT '[]',
+    skip_if_previous_scan_running INTEGER NOT NULL DEFAULT 1,
+    max_reminders_per_event_per_day INTEGER NOT NULL DEFAULT 1,
+    skip_completed_events INTEGER NOT NULL DEFAULT 1,
+    status TEXT NOT NULL DEFAULT 'pending',
+    run_token TEXT,
+    claimed_at TEXT,
+    finished_at TEXT,
+    result_payload_json TEXT NOT NULL DEFAULT '{}',
+    error_summary TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(group_id, job_type, scheduled_for)
+);
+
+CREATE INDEX IF NOT EXISTS idx_automation_runs_status_time ON automation_runs(status, scheduled_for);
+CREATE INDEX IF NOT EXISTS idx_automation_runs_group_job ON automation_runs(group_id, job_type);
+CREATE INDEX IF NOT EXISTS idx_automation_runs_token ON automation_runs(run_token);
+
 CREATE TABLE IF NOT EXISTS task_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     work_schedule_id INTEGER,
@@ -592,10 +619,17 @@ class Database:
                     skipped += 1
         return {"inserted": inserted, "skipped": skipped}
 
-    def list_download_jobs(self, limit: int = 50) -> list[dict[str, Any]]:
+    def list_download_jobs(self, limit: int = 50, group_name: str | None = None) -> list[dict[str, Any]]:
+        group_filter = ""
+        params: list[Any] = []
+        normalized_group_name = str(group_name or "").strip()
+        if normalized_group_name:
+            group_filter = "AND rm.group_name = ?"
+            params.append(normalized_group_name)
+        params.append(max(limit * 3, limit))
         with self.connect() as conn:
             rows = conn.execute(
-                """
+                f"""
                 SELECT
                     rm.*,
                     rr.work_date AS repair_work_date,
@@ -606,12 +640,13 @@ class Database:
                 JOIN repair_records rr ON rr.raw_message_id = rm.id
                 WHERE rm.has_attachments = 1
                   AND rm.analysis_status = 'done'
+                  {group_filter}
                   AND COALESCE(NULLIF(TRIM(rr.site), ''), '') != ''
                 GROUP BY rm.id
                 ORDER BY rm.sent_at ASC
                 LIMIT ?
                 """,
-                (max(limit * 3, limit),),
+                tuple(params),
             ).fetchall()
         jobs = []
         for row in rows:
@@ -668,6 +703,7 @@ class Database:
             "reminders",
             "mock_feishu_records",
             "run_records",
+            "automation_runs",
             "task_events",
             "issue_records",
         ]
@@ -1230,13 +1266,26 @@ class Database:
             ).fetchall()
         return [dict(row) for row in rows]
 
-    def list_schedules_without_repair_records(self, work_date: str, limit: int = 100) -> list[dict[str, Any]]:
+    def list_schedules_without_repair_records(
+        self,
+        work_date: str,
+        limit: int = 100,
+        site_names: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        site_filter = ""
+        params: list[Any] = [work_date]
+        if site_names:
+            placeholders = ",".join("?" for _ in site_names)
+            site_filter = f"AND COALESCE(ws.site, '') IN ({placeholders})"
+            params.extend(site_names)
+        params.append(limit)
         with self.connect() as conn:
             rows = conn.execute(
-                """
+                f"""
                 SELECT ws.*
                 FROM work_schedules ws
                 WHERE ws.work_date = ?
+                  {site_filter}
                   AND NOT EXISTS (
                     SELECT 1 FROM repair_records rr
                     WHERE rr.work_schedule_id = ws.id
@@ -1244,7 +1293,7 @@ class Database:
                 ORDER BY ws.work_date ASC, ws.staff_name ASC, ws.id ASC
                 LIMIT ?
                 """,
-                (work_date, limit),
+                tuple(params),
             ).fetchall()
         return [dict(row) for row in rows]
 
@@ -1539,6 +1588,7 @@ class Database:
         *,
         work_date: str | None = None,
         limit: int = 100,
+        site_names: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         statuses = ("未回复", "未回覆", "资料不足", "資料不足", "需要跟进", "需要跟進")
         params: list[Any] = list(statuses)
@@ -1546,6 +1596,10 @@ class Database:
         if work_date:
             date_filter = "AND rr.work_date = ?"
             params.append(work_date)
+        site_filter = ""
+        if site_names:
+            site_filter = f"AND COALESCE(rr.site, '') IN ({','.join('?' for _ in site_names)})"
+            params.extend(site_names)
         params.append(limit)
         with self.connect() as conn:
             rows = conn.execute(
@@ -1562,6 +1616,7 @@ class Database:
                 WHERE rr.completion_status IN ({",".join("?" for _ in statuses)})
                   AND rr.raw_message_id IS NOT NULL
                   {date_filter}
+                  {site_filter}
                 ORDER BY rr.work_date ASC, rr.staff_name ASC, rr.id ASC
                 LIMIT ?
                 """,
@@ -2008,18 +2063,199 @@ class Database:
             )
         return True
 
-    def list_pending_reminders(self, limit: int = 50) -> list[dict[str, Any]]:
+    def list_pending_reminders(self, limit: int = 50, site_names: list[str] | None = None) -> list[dict[str, Any]]:
+        site_filter = ""
+        params: list[Any] = []
+        if site_names:
+            site_filter = f"AND COALESCE(rr.site, '') IN ({','.join('?' for _ in site_names)})"
+            params.extend(site_names)
+        params.append(limit)
+        with self.connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT
+                    r.*,
+                    rr.work_date,
+                    rr.staff_name,
+                    rr.site,
+                    rr.summary,
+                    rr.completion_status
+                FROM reminders r
+                JOIN repair_records rr ON rr.id = r.repair_record_id
+                WHERE r.status = 'pending'
+                  {site_filter}
+                ORDER BY r.created_at ASC
+                LIMIT ?
+                """,
+                tuple(params),
+            ).fetchall()
+        reminders = []
+        for row in rows:
+            reminder = dict(row)
+            reminder["result_payload"] = loads(reminder.pop("result_payload_json", "{}"), {})
+            reminders.append(reminder)
+        return reminders
+
+    def upsert_automation_jobs(self, jobs: list[dict[str, Any]]) -> int:
+        if not jobs:
+            return 0
+        now = utc_now()
+        inserted = 0
+        with self.connect() as conn:
+            for job in jobs:
+                cur = conn.execute(
+                    """
+                    INSERT INTO automation_runs (
+                        group_id, group_name, job_type, scheduled_for, timezone,
+                        site_names_json, actions_json, skip_if_previous_scan_running,
+                        max_reminders_per_event_per_day, skip_completed_events,
+                        status, created_at, updated_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+                    ON CONFLICT(group_id, job_type, scheduled_for) DO UPDATE SET
+                        group_name = excluded.group_name,
+                        timezone = excluded.timezone,
+                        site_names_json = excluded.site_names_json,
+                        actions_json = excluded.actions_json,
+                        skip_if_previous_scan_running = excluded.skip_if_previous_scan_running,
+                        max_reminders_per_event_per_day = excluded.max_reminders_per_event_per_day,
+                        skip_completed_events = excluded.skip_completed_events,
+                        updated_at = excluded.updated_at
+                    """,
+                    (
+                        job["group_id"],
+                        job["group_name"],
+                        job["job_type"],
+                        job["scheduled_for"],
+                        job["timezone"],
+                        dumps(job.get("site_names", [])),
+                        dumps(job.get("actions", [])),
+                        1 if job.get("skip_if_previous_scan_running", True) else 0,
+                        int(job.get("max_reminders_per_event_per_day", 1)),
+                        1 if job.get("skip_completed_events", True) else 0,
+                        now,
+                        now,
+                    ),
+                )
+                inserted += 1 if cur.rowcount else 0
+        return inserted
+
+    def mark_stale_automation_runs(self, stale_before: str) -> int:
+        with self.connect() as conn:
+            cur = conn.execute(
+                """
+                UPDATE automation_runs
+                SET status = 'stale', updated_at = ?
+                WHERE status = 'claimed'
+                  AND claimed_at IS NOT NULL
+                  AND claimed_at < ?
+                """,
+                (utc_now(), stale_before),
+            )
+        return int(cur.rowcount)
+
+    def has_claimed_scan_run(self) -> bool:
+        with self.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT 1 FROM automation_runs
+                WHERE status = 'claimed' AND job_type = 'scan_cycle'
+                LIMIT 1
+                """
+            ).fetchone()
+        return bool(row)
+
+    def has_claimed_scan_run_for_group(self, group_id: str) -> bool:
+        with self.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT 1 FROM automation_runs
+                WHERE status = 'claimed'
+                  AND job_type = 'scan_cycle'
+                  AND group_id = ?
+                LIMIT 1
+                """,
+                (group_id,),
+            ).fetchone()
+        return bool(row)
+
+    def list_automation_run_candidates(self, limit: int = 20) -> list[dict[str, Any]]:
         with self.connect() as conn:
             rows = conn.execute(
                 """
-                SELECT * FROM reminders
-                WHERE status = 'pending'
-                ORDER BY created_at ASC
+                SELECT *
+                FROM automation_runs
+                WHERE status IN ('pending', 'stale')
+                ORDER BY scheduled_for ASC, id ASC
                 LIMIT ?
                 """,
                 (limit,),
             ).fetchall()
-        return [dict(row) for row in rows]
+        return [self._automation_run_row(row) for row in rows]
+
+    def claim_automation_run(self, run_id: int, run_token: str) -> dict[str, Any] | None:
+        now = utc_now()
+        with self.connect() as conn:
+            cur = conn.execute(
+                """
+                UPDATE automation_runs
+                SET status = 'claimed',
+                    run_token = ?,
+                    claimed_at = ?,
+                    finished_at = NULL,
+                    error_summary = '',
+                    updated_at = ?
+                WHERE id = ?
+                  AND status IN ('pending', 'stale')
+                """,
+                (run_token, now, now, run_id),
+            )
+            if not cur.rowcount:
+                return None
+            row = conn.execute("SELECT * FROM automation_runs WHERE id = ?", (run_id,)).fetchone()
+        return self._automation_run_row(row) if row else None
+
+    def save_automation_run_result(
+        self,
+        *,
+        run_token: str,
+        status: str,
+        result_payload: dict[str, Any],
+        error_summary: str = "",
+    ) -> bool:
+        final_status = {
+            "success": "succeeded",
+            "failed": "failed",
+            "skipped": "skipped",
+        }.get(status, status)
+        now = utc_now()
+        with self.connect() as conn:
+            cur = conn.execute(
+                """
+                UPDATE automation_runs
+                SET status = ?,
+                    finished_at = ?,
+                    result_payload_json = ?,
+                    error_summary = ?,
+                    updated_at = ?
+                WHERE run_token = ?
+                  AND status = 'claimed'
+                """,
+                (final_status, now, dumps(result_payload), str(error_summary or "")[:500], now, run_token),
+            )
+        return bool(cur.rowcount)
+
+    def list_automation_runs(self, limit: int = 50) -> list[dict[str, Any]]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM automation_runs
+                ORDER BY scheduled_for DESC, id DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        return [self._automation_run_row(row) for row in rows]
 
     def save_reminder_result(self, reminder_id: int, status: str, payload: dict[str, Any]) -> None:
         sent_at = utc_now() if status == "sent" else None
@@ -2039,6 +2275,16 @@ class Database:
         data["attachment_hints"] = loads(data.pop("attachment_hints_json", "[]"), [])
         data["raw_payload"] = loads(data.pop("raw_payload_json", "{}"), {})
         data["has_attachments"] = bool(data["has_attachments"])
+        return data
+
+    @staticmethod
+    def _automation_run_row(row: sqlite3.Row) -> dict[str, Any]:
+        data = dict(row)
+        data["site_names"] = loads(data.pop("site_names_json", "[]"), [])
+        data["actions"] = loads(data.pop("actions_json", "[]"), [])
+        data["result_payload"] = loads(data.pop("result_payload_json", "{}"), {})
+        data["skip_if_previous_scan_running"] = bool(data["skip_if_previous_scan_running"])
+        data["skip_completed_events"] = bool(data["skip_completed_events"])
         return data
 
     def _missing_attachment_types_for_message(self, message: dict[str, Any]) -> list[str]:

@@ -874,6 +874,182 @@ class DatabaseTests(unittest.TestCase):
             self.assertEqual(issues[0]["converted_work_schedule_id"], schedule["id"])
             self.assertEqual(issues[0]["decision_note"], "自动匹配")
 
+    def test_list_download_jobs_can_filter_by_group_name(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db = Database(Path(temp_dir) / "test.db")
+            db.init()
+            db.insert_messages(
+                [
+                    {
+                        "group_name": "群A",
+                        "sender": "Kei",
+                        "sent_at": "2026-06-10T18:00:00+08:00",
+                        "text": "群A 完成，附 PDF",
+                        "message_fingerprint": "ga" * 32,
+                        "has_attachments": True,
+                        "attachment_hints": [{"type": "pdf"}],
+                        "raw_payload": {},
+                    },
+                    {
+                        "group_name": "群B",
+                        "sender": "Kei",
+                        "sent_at": "2026-06-10T18:10:00+08:00",
+                        "text": "群B 完成，附 PDF",
+                        "message_fingerprint": "gb" * 32,
+                        "has_attachments": True,
+                        "attachment_hints": [{"type": "pdf"}],
+                        "raw_payload": {},
+                    },
+                ]
+            )
+            message_a = db.get_message_by_fingerprint("ga" * 32)
+            message_b = db.get_message_by_fingerprint("gb" * 32)
+            db.mark_message_done(message_a["id"])
+            db.mark_message_done(message_b["id"])
+            db.save_repair_record(
+                message_a["id"],
+                {"work_date": "2026-06-10", "staff_name": "Kei", "site": "淺水灣", "summary": "群A", "completion_status": "已完成"},
+            )
+            db.save_repair_record(
+                message_b["id"],
+                {"work_date": "2026-06-10", "staff_name": "Kei", "site": "LPP", "summary": "群B", "completion_status": "已完成"},
+            )
+
+            jobs = db.list_download_jobs(group_name="群A")
+
+            self.assertEqual(len(jobs), 1)
+            self.assertEqual(jobs[0]["group_name"], "群A")
+
+    def test_automation_runs_can_be_upserted_claimed_and_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db = Database(Path(temp_dir) / "test.db")
+            db.init()
+            jobs = [
+                {
+                    "group_id": "group_a",
+                    "group_name": "群A",
+                    "job_type": "scan_cycle",
+                    "scheduled_for": "2026-06-27T10:00:00+08:00",
+                    "timezone": "Asia/Hong_Kong",
+                    "site_names": ["淺水灣"],
+                    "actions": ["collect_messages", "download_attachments"],
+                    "skip_if_previous_scan_running": True,
+                    "max_reminders_per_event_per_day": 2,
+                    "skip_completed_events": True,
+                }
+            ]
+
+            db.upsert_automation_jobs(jobs)
+            db.upsert_automation_jobs(jobs)
+            candidates = db.list_automation_run_candidates()
+            claimed = db.claim_automation_run(candidates[0]["id"], "token_12345678")
+            saved = db.save_automation_run_result(
+                run_token="token_12345678",
+                status="success",
+                result_payload={"messages_posted": 5},
+            )
+            rows = db.list_automation_runs(limit=5)
+
+            self.assertEqual(len(candidates), 1)
+            self.assertEqual(claimed["status"], "claimed")
+            self.assertTrue(saved)
+            self.assertEqual(rows[0]["status"], "succeeded")
+            self.assertEqual(rows[0]["result_payload"], {"messages_posted": 5})
+
+    def test_stale_automation_run_can_be_reclaimed(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db = Database(Path(temp_dir) / "test.db")
+            db.init()
+            db.upsert_automation_jobs(
+                [
+                    {
+                        "group_id": "group_a",
+                        "group_name": "群A",
+                        "job_type": "scan_cycle",
+                        "scheduled_for": "2026-06-27T10:00:00+08:00",
+                        "timezone": "Asia/Hong_Kong",
+                        "site_names": [],
+                        "actions": ["collect_messages"],
+                        "skip_if_previous_scan_running": True,
+                        "max_reminders_per_event_per_day": 1,
+                        "skip_completed_events": True,
+                    }
+                ]
+            )
+            candidate = db.list_automation_run_candidates(limit=1)[0]
+            db.claim_automation_run(candidate["id"], "token_old")
+
+            changed = db.mark_stale_automation_runs("9999-12-31T23:59:59+00:00")
+            reclaimed = db.claim_automation_run(candidate["id"], "token_new")
+
+            self.assertEqual(changed, 1)
+            self.assertEqual(reclaimed["run_token"], "token_new")
+            self.assertEqual(reclaimed["status"], "claimed")
+
+    def test_pending_reminders_can_filter_by_site_name(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db = Database(Path(temp_dir) / "test.db")
+            db.init()
+            db.insert_messages(
+                [
+                    {
+                        "group_name": "维修群",
+                        "sender": "Casey",
+                        "sent_at": "2026-06-10 13:00",
+                        "text": "淺水灣 缺 PDF",
+                        "message_fingerprint": "ra" * 32,
+                        "has_attachments": False,
+                        "attachment_hints": [],
+                        "raw_payload": {},
+                    },
+                    {
+                        "group_name": "维修群",
+                        "sender": "Casey",
+                        "sent_at": "2026-06-10 14:00",
+                        "text": "LPP 缺照片",
+                        "message_fingerprint": "rb" * 32,
+                        "has_attachments": False,
+                        "attachment_hints": [],
+                        "raw_payload": {},
+                    },
+                ]
+            )
+            first_message = db.get_message_by_fingerprint("ra" * 32)
+            second_message = db.get_message_by_fingerprint("rb" * 32)
+            first_id = db.save_repair_record(
+                first_message["id"],
+                {"staff_name": "Casey", "site": "淺水灣", "summary": "缺 PDF", "completion_status": "资料不足"},
+            )
+            second_id = db.save_repair_record(
+                second_message["id"],
+                {"staff_name": "Casey", "site": "LPP", "summary": "缺照片", "completion_status": "资料不足"},
+            )
+            db.create_reminder_if_needed(
+                first_id,
+                {
+                    "staff_name": "Casey",
+                    "completion_status": "资料不足",
+                    "missing_items": ["维修报告 PDF"],
+                    "next_actions": [],
+                    "reminder_text": "@Casey 请补 PDF",
+                },
+            )
+            db.create_reminder_if_needed(
+                second_id,
+                {
+                    "staff_name": "Casey",
+                    "completion_status": "资料不足",
+                    "missing_items": ["现场照片"],
+                    "next_actions": [],
+                    "reminder_text": "@Casey 请补照片",
+                },
+            )
+
+            reminders = db.list_pending_reminders(site_names=["淺水灣"])
+
+            self.assertEqual(len(reminders), 1)
+            self.assertEqual(reminders[0]["site"], "淺水灣")
+
 
 if __name__ == "__main__":
     unittest.main()

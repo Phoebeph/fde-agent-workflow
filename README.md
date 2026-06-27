@@ -22,7 +22,7 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-编辑 `.env`，填入新的 DeepSeek key、WhatsApp 群组名和本地数据目录。不要把真实 key 写入代码、README 或提交记录。
+编辑 `.env`，填入新的 DeepSeek key、本地数据目录和 `YINGDAO_ENTRY_COMMAND`。业务调度配置统一放在 `config/customer_settings.json`。不要把真实 key 写入代码、README 或提交记录。
 
 客户电脑本地部署建议设置：
 
@@ -49,6 +49,13 @@ python scripts/init_db.py
 uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
+正式运行前至少检查这两个本地文件：
+
+```text
+.env
+config/customer_settings.json
+```
+
 ## Yingdao Integration
 
 影刀流程调用这些接口：
@@ -56,6 +63,8 @@ uvicorn app.main:app --host 127.0.0.1 --port 8000
 - `POST /api/whatsapp/messages`：提交抓到的 WhatsApp 消息。
 - `GET /api/whatsapp/download-jobs`：获取需要下载附件的消息。
 - `POST /api/whatsapp/attachments`：提交附件下载结果。
+- `GET /api/automation/next`：领取一个到点的自动化任务，无任务时返回 `job: null`。
+- `POST /api/automation/report`：影刀执行后回报 `success / failed / skipped`。
 - `GET /api/reminders/pending`：获取待发送提醒。
 - `POST /api/reminders/result`：提交提醒发送结果。
 
@@ -65,7 +74,15 @@ uvicorn app.main:app --host 127.0.0.1 --port 8000
 - `docs/yingdao_today_scan.md`：当天全量增量扫描、附件两步下载和验收步骤。
 - `docs/first_real_yingdao_test.md`：第一轮真实群小范围测试流程。
 
-影刀第一版建议每 5 分钟运行一次，每次扫描当天全部消息；后端按消息指纹去重，所以重复提交不会重复入库。扫描阶段只提交附件提示，下载阶段再按 `download-jobs` 回到 WhatsApp 下载图片/PDF。
+正式运行建议改成“每 1 分钟拉起一次影刀入口流”。入口流只做一件事：
+
+1. 调 `GET /api/automation/next` 领取任务。
+2. 无任务立即退出。
+3. `scan_cycle` 时打开指定群，执行消息采集和附件下载。
+4. `reminder_cycle` 时先调 `/api/followups/run`，再按站点过滤拉 `/api/reminders/pending` 并发送。
+5. 调 `POST /api/automation/report` 回写结果。
+
+后端负责按 `config/customer_settings.json` 计算什么时候该扫哪个群、什么时候该发哪个群对应站点的提醒。影刀不再自己判断时间。
 
 不用影刀时，可以先用示例 payload 验证 `/api/whatsapp/messages`：
 
@@ -214,6 +231,26 @@ curl -X POST 'http://127.0.0.1:8000/api/schedules/check-unreplied?work_date=2026
 
 ```bash
 curl -X POST 'http://127.0.0.1:8000/api/followups/run?work_date=2026-06-10&limit=100'
+```
+
+## Automation Scheduling
+
+自动调度现在由后端按 `config/customer_settings.json` 动态计算，不再依赖进程内常驻 scheduler 线程。关键点：
+
+- `scan`：按 `interval_minutes + start_offset_seconds` 生成当天时间槽。
+- `reminder`：按 `days_of_week + times` 生成固定提醒时间槽。
+- `related_site_ids`：决定该群 reminder job 只处理哪些地点。
+- 配置文件改动后，无需重启后端；后端会在下一次请求时自动刷新。
+
+Windows 推荐部署方式：
+
+- 计划任务 A：开机或登录时运行 `scripts\start_backend.bat`
+- 计划任务 B：每 1 分钟运行一次 `scripts\run_yingdao_poll.bat`
+
+部署前先跑：
+
+```bash
+.venv/bin/python scripts/check_config.py --mode all
 ```
 
 该接口会同时检查：
