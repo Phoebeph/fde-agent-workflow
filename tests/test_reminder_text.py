@@ -109,6 +109,21 @@ class ReminderTextTests(unittest.TestCase):
         self.assertIn("有冇維修報告掃描?", message)
         self.assertIn("Record:", message)
 
+    def test_analysis_reminder_returns_empty_without_staff(self) -> None:
+        message = generate_analysis_reminder_message(
+            {
+                "staff_name": "",
+                "work_date": "2026-06-19",
+                "site": "The Henderson",
+                "summary": "ecall service 維修",
+                "completion_status": "资料不足",
+                "missing_items": ["维修报告 PDF"],
+                "next_actions": [],
+            }
+        )
+
+        self.assertEqual(message, "")
+
     def test_missing_type_ignores_generic_photo_when_not_in_analysis(self) -> None:
         missing_type = reminder_missing_type(
             {

@@ -389,6 +389,82 @@ def _site_is_watched_for_reminder(analysis: dict[str, object]) -> bool:
     return bool(_match_enabled_customer_site(text))
 
 
+def _parse_message_sent_at(value: object) -> datetime | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw)
+    except ValueError:
+        pass
+    for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S"):
+        try:
+            return datetime.strptime(raw, fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def _should_merge_messages(previous: dict[str, object], current: dict[str, object]) -> bool:
+    if str(previous.get("group_name") or "") != str(current.get("group_name") or ""):
+        return False
+    if str(previous.get("sender") or "").strip().casefold() != str(current.get("sender") or "").strip().casefold():
+        return False
+    previous_sent_at = _parse_message_sent_at(previous.get("sent_at"))
+    current_sent_at = _parse_message_sent_at(current.get("sent_at"))
+    if previous_sent_at is None or current_sent_at is None:
+        return False
+    if current_sent_at < previous_sent_at:
+        return False
+    if (current_sent_at - previous_sent_at).total_seconds() > 180:
+        return False
+    previous_chunks = split_work_item_text(str(previous.get("text") or "").strip())
+    current_chunks = split_work_item_text(str(current.get("text") or "").strip())
+    if len(previous_chunks) > 1 or len(current_chunks) > 1:
+        return False
+    return True
+
+
+def _merge_message_group(messages: list[dict[str, object]]) -> dict[str, object]:
+    merged = dict(messages[0])
+    text_parts: list[str] = []
+    seen_parts: set[str] = set()
+    attachment_hints: list[dict[str, object]] = []
+    for message in messages:
+        text = str(message.get("text") or "").strip()
+        normalized = " ".join(text.split()).casefold()
+        if text and normalized not in seen_parts:
+            text_parts.append(text)
+            seen_parts.add(normalized)
+        for hint in message.get("attachment_hints") or []:
+            if isinstance(hint, dict):
+                attachment_hints.append(hint)
+    merged["text"] = "\n".join(text_parts).strip()
+    merged["has_attachments"] = any(bool(message.get("has_attachments")) for message in messages)
+    merged["attachment_hints"] = attachment_hints
+    return merged
+
+
+def _build_analysis_groups(messages: list[dict[str, object]]) -> list[dict[str, object]]:
+    groups: list[dict[str, object]] = []
+    for message in messages:
+        if not groups or not _should_merge_messages(groups[-1]["messages"][-1], message):
+            groups.append({"messages": [message]})
+            continue
+        groups[-1]["messages"].append(message)
+    result: list[dict[str, object]] = []
+    for group in groups:
+        members = group["messages"]
+        result.append(
+            {
+                "primary": members[0],
+                "messages": members,
+                "merged_message": _merge_message_group(members),
+            }
+        )
+    return result
+
+
 def _analyze_messages(messages: list[dict[str, object]], sync_feishu: bool) -> dict[str, object]:
     rules = db.list_rules()
     deepseek = deepseek_client()
@@ -401,49 +477,56 @@ def _analyze_messages(messages: list[dict[str, object]], sync_feishu: bool) -> d
     records: list[dict[str, object]] = []
     skipped = 0
 
-    for message in messages:
-        attachments = db.list_attachments_for_message(message["id"])
+    for group in _build_analysis_groups(messages):
+        primary_message = group["primary"]
+        grouped_messages = group["messages"]
+        merged_message = group["merged_message"]
+        attachments = []
+        for grouped_message in grouped_messages:
+            attachments.extend(db.list_attachments_for_message(grouped_message["id"]))
         try:
-            db.delete_repair_records_for_message(message["id"])
-            if _is_standalone_attachment_label(str(message.get("text") or "")):
-                db.mark_message_done(message["id"])
+            for grouped_message in grouped_messages:
+                db.delete_repair_records_for_message(grouped_message["id"])
+            if _is_standalone_attachment_label(str(merged_message.get("text") or "")):
+                for grouped_message in grouped_messages:
+                    db.mark_message_done(grouped_message["id"])
                 skipped += 1
                 records.append(
                     {
-                        "message_fingerprint": message["message_fingerprint"],
+                        "message_fingerprint": primary_message["message_fingerprint"],
                         "skipped": True,
                         "skip_reason": "standalone_attachment_label",
                     }
                 )
                 continue
             analyses = deepseek.analyze_message_items(
-                message=message,
+                message=merged_message,
                 attachments=attachments,
                 rules=rules,
             )
-            analyses = _augment_analyses_with_configured_sites(analyses, message, attachments, rules)
-            schedules = db.list_schedules_for_message(message)
+            analyses = _augment_analyses_with_configured_sites(analyses, merged_message, attachments, rules)
+            schedules = db.list_schedules_for_message(merged_message)
             first_feishu_record_id = None
             for item_index, raw_analysis in enumerate(analyses):
-                raw_analysis = _apply_staff_mapping(raw_analysis, message)
-                raw_analysis = _apply_site_mapping(raw_analysis, message)
+                raw_analysis = _apply_staff_mapping(raw_analysis, merged_message)
+                raw_analysis = _apply_site_mapping(raw_analysis, merged_message)
                 analysis = apply_schedule_completion(
                     analysis=raw_analysis,
-                    message=message,
+                    message=merged_message,
                     attachments=attachments,
                     schedules=schedules,
                 )
-                analysis["whatsapp_text"] = str(message.get("text") or "").strip()
+                analysis["whatsapp_text"] = str(merged_message.get("text") or "").strip()
                 feishu_record_id = None
                 if sync_feishu and settings.feishu_sync_available:
-                    fields = feishu.fields_for_repair_record(message, analysis, attachments)
+                    fields = feishu.fields_for_repair_record(merged_message, analysis, attachments)
                     if len(analyses) > 1:
-                        fields["WhatsApp原文"] = analysis.get("summary") or message.get("text", "")
+                        fields["WhatsApp原文"] = analysis.get("summary") or merged_message.get("text", "")
                     if feishu.enabled:
                         feishu_record_id = feishu.create_record(fields)
                     else:
                         record_id_for_update = (
-                            message.get("feishu_record_id")
+                            primary_message.get("feishu_record_id")
                             if item_index == 0 and len(analyses) == 1
                             else None
                         )
@@ -452,7 +535,7 @@ def _analyze_messages(messages: list[dict[str, object]], sync_feishu: bool) -> d
                         first_feishu_record_id = feishu_record_id
                     feishu_synced += 1
                 record_id = db.save_repair_record(
-                    message["id"],
+                    primary_message["id"],
                     analysis,
                     feishu_record_id,
                     item_index=item_index,
@@ -466,7 +549,7 @@ def _analyze_messages(messages: list[dict[str, object]], sync_feishu: bool) -> d
                     reminders_created += 1
                 records.append(
                     {
-                        "message_fingerprint": message["message_fingerprint"],
+                        "message_fingerprint": primary_message["message_fingerprint"],
                         "item_index": item_index,
                         "feishu_record_id": feishu_record_id,
                         "completion_status": analysis.get("completion_status", ""),
@@ -476,12 +559,21 @@ def _analyze_messages(messages: list[dict[str, object]], sync_feishu: bool) -> d
                     }
                 )
                 analyzed += 1
-            if not analyses:
-                db.mark_message_done(message["id"])
+            for grouped_message in grouped_messages:
+                db.mark_message_done(grouped_message["id"])
+            if len(grouped_messages) > 1:
+                for grouped_message in grouped_messages[1:]:
+                    records.append(
+                        {
+                            "message_fingerprint": grouped_message["message_fingerprint"],
+                            "merged_into": primary_message["message_fingerprint"],
+                        }
+                    )
             elif not first_feishu_record_id:
-                db.mark_message_done(message["id"])
+                db.mark_message_done(primary_message["id"])
         except (DeepSeekError, FeishuError, ValueError) as exc:
-            db.mark_message_retry(message["id"])
+            for grouped_message in grouped_messages:
+                db.mark_message_retry(grouped_message["id"])
             failed += 1
             if first_error is None:
                 first_error = str(exc)

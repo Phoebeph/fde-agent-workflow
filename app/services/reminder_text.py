@@ -91,7 +91,9 @@ def generate_analysis_reminder_message(
     record: str = "",
     reminder_count: int = 1,
 ) -> str:
-    staff_name = _text(analysis.get("staff_name")) or "相关同事"
+    staff_name = _text(analysis.get("staff_name"))
+    if not staff_name:
+        return ""
     mention_name = _text(analysis.get("mention_name")) or _mention(staff_name)
     matched = analysis.get("matched_schedule") if isinstance(analysis.get("matched_schedule"), dict) else {}
     task_content = (

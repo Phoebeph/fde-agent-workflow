@@ -130,6 +130,71 @@ class DatabaseTests(unittest.TestCase):
 
             self.assertEqual(db.list_download_jobs(), [])
 
+    def test_download_jobs_keep_message_until_all_attachment_types_are_uploaded(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db = Database(Path(temp_dir) / "test.db")
+            db.init()
+            message = {
+                "group_name": "维修群",
+                "sender": "Kei",
+                "sent_at": "2026-06-10T18:00:00+08:00",
+                "text": "完成，附相及 PDF",
+                "message_fingerprint": "kp" * 32,
+                "has_attachments": True,
+                "attachment_hints": [{"type": "image"}, {"type": "pdf"}],
+                "raw_payload": {},
+            }
+            db.insert_messages([message])
+            stored = db.get_message_by_fingerprint("kp" * 32)
+            db.mark_message_done(stored["id"])
+            db.save_repair_record(
+                stored["id"],
+                {
+                    "work_date": "2026-06-10",
+                    "staff_name": "Kei",
+                    "site": "商场A",
+                    "work_type": "maintenance",
+                    "summary": "完成，附相及 PDF",
+                    "completion_status": "已完成",
+                },
+            )
+
+            initial_jobs = db.list_download_jobs()
+            self.assertEqual(len(initial_jobs), 1)
+            self.assertEqual(initial_jobs[0]["missing_attachment_types"], ["image", "pdf"])
+
+            db.insert_attachment(
+                {
+                    "raw_message_id": stored["id"],
+                    "original_filename": "photo.jpg",
+                    "original_path": "/tmp/photo.jpg",
+                    "archive_filename": "2026-06-10_site_Kei_work_image_abcd.jpg",
+                    "archive_path": "archive/2026/06/site/2026-06-10_site_Kei_work_image_abcd.jpg",
+                    "attachment_type": "image",
+                    "sha256": "d" * 64,
+                    "size_bytes": 12,
+                }
+            )
+
+            followup_jobs = db.list_download_jobs()
+            self.assertEqual(len(followup_jobs), 1)
+            self.assertEqual(followup_jobs[0]["missing_attachment_types"], ["pdf"])
+
+            db.insert_attachment(
+                {
+                    "raw_message_id": stored["id"],
+                    "original_filename": "report.pdf",
+                    "original_path": "/tmp/report.pdf",
+                    "archive_filename": "2026-06-10_site_Kei_work_pdf_abcd.pdf",
+                    "archive_path": "archive/2026/06/site/2026-06-10_site_Kei_work_pdf_abcd.pdf",
+                    "attachment_type": "pdf",
+                    "sha256": "e" * 64,
+                    "size_bytes": 24,
+                }
+            )
+
+            self.assertEqual(db.list_download_jobs(), [])
+
     def test_get_message_by_external_id(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             db = Database(Path(temp_dir) / "test.db")
@@ -335,6 +400,54 @@ class DatabaseTests(unittest.TestCase):
                 db.create_reminder_if_needed(
                     second_id,
                     {"staff_name": "Casey", "completion_status": "待人工确认", "missing_items": [], "next_actions": []},
+                )
+            )
+            self.assertEqual(db.list_pending_reminders(), [])
+
+    def test_create_reminder_requires_target_and_content(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db = Database(Path(temp_dir) / "test.db")
+            db.init()
+            db.insert_messages([
+                {
+                    "group_name": "维修群",
+                    "sender": "Casey",
+                    "sent_at": "2026-06-10 13:00",
+                    "text": "缺 PDF",
+                    "message_fingerprint": "w" * 64,
+                    "has_attachments": False,
+                    "attachment_hints": [],
+                    "raw_payload": {},
+                }
+            ])
+            message = db.get_message_by_fingerprint("w" * 64)
+            record_id = db.save_repair_record(
+                message["id"],
+                {"staff_name": "Casey", "summary": "缺 PDF", "completion_status": "资料不足"},
+            )
+
+            self.assertFalse(
+                db.create_reminder_if_needed(
+                    record_id,
+                    {
+                        "staff_name": "",
+                        "completion_status": "资料不足",
+                        "missing_items": ["维修报告 PDF"],
+                        "next_actions": [],
+                        "reminder_text": "@Casey 请补维修报告扫描",
+                    },
+                )
+            )
+            self.assertFalse(
+                db.create_reminder_if_needed(
+                    record_id,
+                    {
+                        "staff_name": "Casey",
+                        "completion_status": "资料不足",
+                        "missing_items": ["维修报告 PDF"],
+                        "next_actions": [],
+                        "reminder_text": "",
+                    },
                 )
             )
             self.assertEqual(db.list_pending_reminders(), [])

@@ -435,8 +435,12 @@ def normalize_analysis(
     result["reminder_text"] = to_simplified_text(str(result.get("reminder_text") or ""))
     if result["missing_items"] and result["completion_status"] == "已完成":
         result["completion_status"] = "资料不足"
-    if (result["missing_items"] or result["completion_status"] in {"未回复", "资料不足", "需要跟进"}) and not result["reminder_text"]:
-        target = result["staff_name"] or "相关同事"
+    if (
+        result["staff_name"]
+        and (result["missing_items"] or result["completion_status"] in {"未回复", "资料不足", "需要跟进"})
+        and not result["reminder_text"]
+    ):
+        target = result["staff_name"]
         reason = "、".join(result["missing_items"] or result["next_actions"] or [result["completion_status"]])
         result["reminder_text"] = f"@{target} 请补充/确认：{reason}"
     return apply_completion_score(result)

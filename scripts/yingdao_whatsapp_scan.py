@@ -202,6 +202,8 @@ def download_attachment_for_message(page: Any, job: dict[str, Any]) -> list[tupl
 
     Use job['sender'], job['sent_at'], job['text'] or job['external_message_id'] to find the WhatsApp row,
     click the image/PDF, save it to DOWNLOAD_DIR, then return [(path, attachment_type), ...].
+    Prioritize only the missing types declared in job['missing_attachment_types'] so a message with
+    both photo and PDF can be revisited until both are uploaded.
     """
     del page, job
     DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)

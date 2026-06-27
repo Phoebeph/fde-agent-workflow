@@ -607,14 +607,11 @@ class Database:
                 WHERE rm.has_attachments = 1
                   AND rm.analysis_status = 'done'
                   AND COALESCE(NULLIF(TRIM(rr.site), ''), '') != ''
-                  AND NOT EXISTS (
-                    SELECT 1 FROM attachments a WHERE a.raw_message_id = rm.id
-                  )
                 GROUP BY rm.id
                 ORDER BY rm.sent_at ASC
                 LIMIT ?
                 """,
-                (limit,),
+                (max(limit * 3, limit),),
             ).fetchall()
         jobs = []
         for row in rows:
@@ -627,7 +624,13 @@ class Database:
             }
             message = self._message_row(data)
             message.update(repair)
+            missing_attachment_types = self._missing_attachment_types_for_message(message)
+            if not missing_attachment_types:
+                continue
+            message["missing_attachment_types"] = missing_attachment_types
             jobs.append(message)
+            if len(jobs) >= limit:
+                break
         return jobs
 
     def list_recent_messages(self, limit: int = 50) -> list[dict[str, Any]]:
@@ -1964,9 +1967,11 @@ class Database:
         status = analysis.get("completion_status", "")
         if not _should_create_reminder(status, missing_items, next_actions):
             return False
-        target = analysis.get("staff_name") or "相关同事"
+        target = str(analysis.get("staff_name") or "").strip()
+        base_content = str(analysis.get("reminder_text") or "").strip()
+        if not target or not base_content:
+            return False
         reason = "、".join(str(item) for item in missing_items) if missing_items else status
-        base_content = str(analysis.get("reminder_text") or f"@{target} 请补充：{reason}").strip()
         content = _compose_reminder_content(base_content, analysis.get("whatsapp_text"))
         with self.connect() as conn:
             existing = conn.execute(
@@ -2035,6 +2040,27 @@ class Database:
         data["raw_payload"] = loads(data.pop("raw_payload_json", "{}"), {})
         data["has_attachments"] = bool(data["has_attachments"])
         return data
+
+    def _missing_attachment_types_for_message(self, message: dict[str, Any]) -> list[str]:
+        raw_message_id = message.get("id")
+        if not raw_message_id:
+            return []
+        expected_types = [
+            str(item.get("type") or "").strip().lower()
+            for item in message.get("attachment_hints") or []
+            if isinstance(item, dict) and str(item.get("type") or "").strip().lower() in {"image", "pdf", "video", "document", "other"}
+        ]
+        if not expected_types:
+            expected_types = ["document"]
+        existing_types = {
+            str(item.get("attachment_type") or "").strip().lower()
+            for item in self.list_attachments_for_message(int(raw_message_id))
+        }
+        missing: list[str] = []
+        for attachment_type in expected_types:
+            if attachment_type not in existing_types and attachment_type not in missing:
+                missing.append(attachment_type)
+        return missing
 
     @staticmethod
     def _staff_row(row: sqlite3.Row) -> dict[str, Any]:
