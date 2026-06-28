@@ -1,5 +1,5 @@
 {
-  "timezone": "Asia/Hong_Kong",
+  "timezone": "Asia/Shanghai",
   "whatsapp": {
     "use_current_logged_in_account": true,
     "global_scan_lock_enabled": true,
