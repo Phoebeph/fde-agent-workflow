@@ -29,7 +29,7 @@
       },
       {
         "id": "group_maintenance_a",
-        "name": "工程維修群A",
+        "name": "工作安排",
         "enabled": true,
 
         "scan": {
@@ -40,7 +40,7 @@
         },
 
         "reminder": {
-          "enabled": true,
+          "enabled": false,
           "days_of_week": ["MON", "TUE", "WED", "THU", "FRI"],
           "times": ["12:15", "18:15"],
           "max_reminders_per_event_per_day": 2,
