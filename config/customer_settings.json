@@ -19,7 +19,7 @@
 
         "reminder": {
           "enabled": true,
-          "days_of_week": ["MON", "TUE", "WED", "THU", "FRI"],
+          "days_of_week": ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"],
           "times": ["12:00", "18:00"],
           "max_reminders_per_event_per_day": 2,
           "skip_completed_events": true
