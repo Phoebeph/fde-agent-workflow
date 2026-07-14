@@ -428,6 +428,8 @@ def _sync_customer_settings_to_database(current: CustomerSettings | None = None)
 
 
 def _group_is_watched(group_name: str) -> bool:
+    if settings.yingdao_manual_control:
+        return True
     current = _current_customer_settings()
     watched = current.whatsapp.watch_groups if current.loaded and not current.error else []
     if not watched:
@@ -468,6 +470,12 @@ def _site_is_watched_for_reminder(analysis: dict[str, object]) -> bool:
 
 def _ensure_due_automation_jobs() -> CustomerSettings:
     current = _current_customer_settings()
+    if settings.yingdao_manual_control:
+        stale_before = (
+            datetime.now(timezone.utc).replace(microsecond=0) - timedelta(seconds=STALE_CLAIM_SECONDS)
+        ).isoformat()
+        db.mark_stale_automation_runs(stale_before)
+        return current
     if current.loaded and not current.error:
         db.upsert_automation_jobs(build_due_automation_jobs(current))
     stale_before = (
@@ -479,6 +487,8 @@ def _ensure_due_automation_jobs() -> CustomerSettings:
 
 def _claim_next_automation_job() -> dict[str, object] | None:
     current = _ensure_due_automation_jobs()
+    if settings.yingdao_manual_control:
+        return None
     if not current.loaded or current.error:
         return None
     groups_by_id = {group.id: group for group in current.whatsapp.groups}
@@ -1196,6 +1206,27 @@ def startup() -> None:
 @app.get("/health")
 def health() -> dict[str, object]:
     current = _current_customer_settings()
+    manual_control = settings.yingdao_manual_control
+    customer_settings = {
+        "path": current.path or str(settings.customer_settings_path),
+        "loaded": current.loaded,
+        "error": current.error,
+        "reminder_sender_account": current.whatsapp.reminder_sender_account,
+        "sites_count": len(current.sites),
+        "groups_count": len(current.whatsapp.groups),
+    }
+    if manual_control:
+        customer_settings["note"] = (
+            "manual control enabled: Yingdao drives groups and timing"
+        )
+    else:
+        customer_settings["watch_groups"] = current.whatsapp.watch_groups
+        customer_settings["scan_interval_minutes"] = current.whatsapp.scan_interval_minutes
+        customer_settings["reminder_interval_minutes"] = current.whatsapp.reminder_interval_minutes
+        customer_settings["note"] = (
+            "backend automation enabled: watch_groups and intervals are enforced"
+        )
+
     return {
         "ok": True,
         "database": str(settings.database_path),
@@ -1203,17 +1234,11 @@ def health() -> dict[str, object]:
         "feishu_enabled": settings.feishu_enabled,
         "feishu_mock_mode": settings.feishu_mock_mode,
         "feishu_sync_available": settings.feishu_sync_available,
-        "customer_settings": {
-            "path": current.path or str(settings.customer_settings_path),
-            "loaded": current.loaded,
-            "error": current.error,
-            "watch_groups": current.whatsapp.watch_groups,
-            "reminder_sender_account": current.whatsapp.reminder_sender_account,
-            "scan_interval_minutes": current.whatsapp.scan_interval_minutes,
-            "reminder_interval_minutes": current.whatsapp.reminder_interval_minutes,
-            "sites_count": len(current.sites),
-            "groups_count": len(current.whatsapp.groups),
-        },
+        "yingdao_manual_control": manual_control,
+        "control_mode": "yingdao_manual" if manual_control else "backend_automation",
+        "group_watch_enforced": not manual_control,
+        "automation_schedule_enabled": not manual_control,
+        "customer_settings": customer_settings,
     }
 
 
@@ -1225,6 +1250,17 @@ def customer_config() -> dict[str, object]:
 @app.get("/api/automation/next")
 def next_automation_job() -> dict[str, object]:
     current = _current_customer_settings()
+    if settings.yingdao_manual_control:
+        return {
+            "job": None,
+            "config": {
+                "loaded": current.loaded,
+                "timezone": current.timezone,
+                "watch_groups": current.whatsapp.watch_groups,
+                "yingdao_manual_control": True,
+                "reason": "manual control enabled",
+            },
+        }
     if not current.loaded:
         return {
             "job": None,

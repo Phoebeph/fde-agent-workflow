@@ -90,6 +90,7 @@ class Settings:
     auto_export_on_ingest: bool = _bool_env("AUTO_EXPORT_ON_INGEST", True)
     auto_pipeline_background: bool = _bool_env("AUTO_PIPELINE_BACKGROUND", True)
     auto_sync_feishu_on_ingest: bool = _bool_env("AUTO_SYNC_FEISHU_ON_INGEST", False)
+    yingdao_manual_control: bool = _bool_env("YINGDAO_MANUAL_CONTROL", False)
     dispatch_manager_senders: tuple[str, ...] = _csv_env(
         "DISPATCH_MANAGER_SENDERS",
         ("Dicky Company", "Rex Atl", "Ono atl"),
