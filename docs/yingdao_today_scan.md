@@ -36,6 +36,7 @@
 ```json
 {
   "sender": "Brian",
+  "is_from_me": false,
   "sent_at": "2026-06-13 10:25",
   "text": "商场52 控制室 CCTV mon 又闪，客户说需要处理。",
   "external_message_id": "维修工作群|Brian|2026-06-13 10:25|商场52 控制室 CCTV mon 又闪，客户说需要处理。|0",
@@ -53,6 +54,7 @@
 字段要求：
 
 - `sender`：WhatsApp 显示的发送人名称。
+- `is_from_me`：是否为当前登录账号发送。影刀应直接跳过 `message-out` 气泡；提交收到的消息时传 `false`。
 - `sent_at`：尽量转为 `YYYY-MM-DD HH:mm`。如果 WhatsApp 只显示 `10:25`，影刀用扫描日期补齐年月日。
 - `text`：消息正文。图片/PDF 没有正文时可以为空字符串。
 - `external_message_id`：优先使用 WhatsApp 内部消息 ID；拿不到时用 `群名|发送人|消息时间|正文前80字|附件数量`。
@@ -82,6 +84,7 @@ Content-Type: application/json
   "messages": [
     {
       "sender": "Brian",
+      "is_from_me": false,
       "sent_at": "2026-06-13 10:25",
       "text": "商场52 控制室 CCTV mon 又闪，客户说需要处理。",
       "external_message_id": "维修工作群|Brian|2026-06-13 10:25|商场52 控制室 CCTV mon 又闪，客户说需要处理。|0",
@@ -173,7 +176,7 @@ GET http://127.0.0.1:8000/api/whatsapp/download-jobs?limit=50
 
 每个任务会包含 `message_fingerprint`、`external_message_id`、发送人、时间、正文、附件提示等信息。影刀按这些信息回到 WhatsApp Web 找到对应消息。
 
-后端只会在消息已经完成 AI 分析后才返回附件下载任务。这样附件回传时，后端已经知道维修记录里的地点，可以把图片/PDF 归档到 `DATA_ROOT\年\月\日\地点\`。其中日期优先使用 WhatsApp 消息发送日期，而不是消息正文里的实际工作日期。
+后端只会在消息已经完成 AI 分析后才返回附件下载任务。附件会继续归档到原有 `DATA_ROOT\年\月\日\地点\`，同时复制到 `DATA_ROOT\地点\年\月\日\维修或报价\`。多地点任务回传时必须附带 `repair_record_id` 或规范地点；默认影刀脚本会跳过需人工选择的多地点附件，不会自动使用第一条记录。日期优先使用 WhatsApp 消息发送日期。
 
 ### 下载和回传
 

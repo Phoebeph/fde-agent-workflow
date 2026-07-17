@@ -16,6 +16,7 @@ class SchemaTests(unittest.TestCase):
                             "发送者": "num5",
                             "消息内容": "完成检查",
                             "时间": "17/6/2026 上午7:32",
+                            "is_from_me": True,
                         },
                         {
                             "发送者": "num6",
@@ -31,6 +32,7 @@ class SchemaTests(unittest.TestCase):
         self.assertEqual(payload.messages[0].text, "完成检查")
         self.assertEqual(payload.messages[0].sent_at, "2026-06-17T07:32:00+08:00")
         self.assertEqual(payload.messages[0].raw_payload["发送者"], "num5")
+        self.assertTrue(payload.messages[0].is_from_me)
         self.assertEqual(payload.messages[1].sent_at, "2026-06-17T20:46:00+08:00")
 
     def test_whatsapp_batch_accepts_yingdao_payload_without_group_name(self) -> None:
@@ -102,6 +104,17 @@ class SchemaTests(unittest.TestCase):
         self.assertIsNone(payload.message_fingerprint)
         self.assertIsNone(payload.original_filename)
         self.assertIsNone(payload.temp_path)
+
+    def test_attachment_accepts_repair_record_id(self) -> None:
+        payload = AttachmentIn.model_validate(
+            {
+                "external_message_id": "yingdao_abc",
+                "repair_record_id": 12,
+                "attachment_type": "image",
+            }
+        )
+
+        self.assertEqual(payload.repair_record_id, 12)
 
     def test_attachment_requires_message_reference(self) -> None:
         with self.assertRaises(ValidationError):

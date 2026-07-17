@@ -2,6 +2,7 @@ import datetime
 from pathlib import Path
 import tempfile
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from app.database import Database
@@ -93,6 +94,7 @@ class AutomationClaimTests(unittest.TestCase):
             with (
                 patch("app.main.db", db),
                 patch("app.main._current_customer_settings", return_value=settings),
+                patch("app.main.settings", SimpleNamespace(yingdao_manual_control=False)),
             ):
                 first = _claim_next_automation_job()
                 second = _claim_next_automation_job()
@@ -131,6 +133,7 @@ class AutomationClaimTests(unittest.TestCase):
             with (
                 patch("app.main.db", db),
                 patch("app.main._current_customer_settings", return_value=settings),
+                patch("app.main.settings", SimpleNamespace(yingdao_manual_control=False)),
             ):
                 first = _claim_next_automation_job()
                 second = _claim_next_automation_job()

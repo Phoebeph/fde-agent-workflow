@@ -36,19 +36,20 @@ from app.schemas import (
     SystemPrinciplesIn,
     WhatsAppMessageBatchIn,
 )
-from app.services.archive import archive_attachment, safe_part
+from app.services.archive import archive_attachment, mirror_attachment_for_category, safe_part
 from app.services.automation import SCAN_CYCLE, STALE_CLAIM_SECONDS, build_due_automation_jobs, parse_site_names_csv
 from app.services.completion import apply_schedule_completion, schedule_gap_analysis
 from app.services.customer_config import CustomerSettings, CustomerSettingsStore
-from app.services.diagnostics import build_location_coverage_report, infer_location_from_item
+from app.services.diagnostics import build_location_coverage_report
 from app.services.deepseek import DeepSeekClient, DeepSeekError, rule_based_analysis, split_work_item_text
 from app.services.dispatch import discover_dispatch_schedules, followup_tracking_to_event
 from app.services.feishu import FeishuClient, FeishuError
 from app.services.fingerprint import message_fingerprint
 from app.services.issues import issue_candidate_from_message, issue_schedule_match_score
-from app.services.local_export import export_daily_workbook
+from app.services.local_export import export_daily_workbook, export_site_classified_workbooks
 from app.services.reminder_text import generate_analysis_reminder_message, generate_reminder_message
 from app.services.rules import load_rules_from_xlsx
+from app.services.site_policy import ConfiguredSitePolicy, business_categories
 
 
 app = FastAPI(title="WhatsApp Repair AI Backend", version="0.1.0")
@@ -117,6 +118,7 @@ def _customer_settings_public_dict(current: CustomerSettings) -> dict[str, objec
         "whatsapp": {
             "use_current_logged_in_account": current.whatsapp.use_current_logged_in_account,
             "global_scan_lock_enabled": current.whatsapp.global_scan_lock_enabled,
+            "current_account_names": current.whatsapp.current_account_names,
             "watch_groups": current.whatsapp.watch_groups,
             "reminder_sender_account": current.whatsapp.reminder_sender_account,
             "scan_interval_minutes": current.whatsapp.scan_interval_minutes,
@@ -250,6 +252,18 @@ def _is_automation_notice(text: str) -> bool:
     return any(marker in text for marker in AUTOMATION_NOTICE_MARKERS)
 
 
+def _is_current_account_message(sender: str, is_from_me: bool) -> bool:
+    if is_from_me:
+        return True
+    current = _current_customer_settings()
+    normalized = str(sender or "").strip().casefold()
+    return bool(normalized) and any(
+        normalized == name.strip().casefold()
+        for name in current.whatsapp.current_account_names
+        if name.strip()
+    )
+
+
 def _is_standalone_attachment_label(text: str) -> bool:
     normalized = "".join((text or "").split()).strip("：:,.，。()（）[]【】")
     if not normalized:
@@ -274,9 +288,17 @@ def _apply_staff_mapping(analysis: dict[str, object], message: dict[str, object]
 
 def _apply_site_mapping(analysis: dict[str, object], message: dict[str, object]) -> dict[str, object]:
     mapped = dict(analysis)
-    current_site = str(mapped.get("site") or "").strip()
-    if current_site:
-        mapped["site"] = db.resolve_site_name(current_site)
+    policy = ConfiguredSitePolicy.for_group(
+        _current_customer_settings(),
+        str(message.get("group_name") or ""),
+    )
+    raw_site = str(mapped.get("site") or "").strip()
+    current_site = policy.canonical_name(raw_site)
+    if raw_site:
+        if not current_site:
+            site_resolution = policy.resolve(raw_site)
+            current_site = site_resolution.site_name if site_resolution.status == "matched" else ""
+        mapped["site"] = current_site
         return mapped
     search_text = "\n".join(
         str(value or "")
@@ -286,9 +308,8 @@ def _apply_site_mapping(analysis: dict[str, object], message: dict[str, object])
             message.get("text"),
         )
     )
-    matched = db.match_site_in_text(search_text)
-    if matched:
-        mapped["site"] = matched["name"]
+    matched = policy.resolve(search_text)
+    mapped["site"] = matched.site_name if matched.status == "matched" else ""
     return mapped
 
 
@@ -367,19 +388,22 @@ def _augment_analyses_with_configured_sites(
     attachments: list[dict[str, object]],
     rules: list[dict[str, object]],
 ) -> list[dict[str, object]]:
-    augmented = list(analyses)
+    policy = ConfiguredSitePolicy.for_group(
+        _current_customer_settings(),
+        str(message.get("group_name") or ""),
+    )
+    augmented: list[dict[str, object]] = []
+    for analysis in analyses:
+        mapped = _apply_site_mapping(analysis, message)
+        if mapped.get("site"):
+            augmented.append(mapped)
     existing_text = "\n".join(
         str(item.get("site") or "") + " " + str(item.get("summary") or "")
         for item in augmented
     ).casefold()
-    for chunk in split_work_item_text(str(message.get("text") or "")):
-        matched = db.match_site_in_text(chunk)
-        if not matched:
-            inferred = infer_location_from_item(chunk)
-            matched = db.match_site_in_text(inferred)
-        if not matched:
-            continue
-        site_name = str(matched["name"])
+    for segment in policy.split(str(message.get("text") or "")):
+        chunk = segment.text
+        site_name = segment.site_name
         if site_name.casefold() in existing_text and str(chunk[:24]).casefold() in existing_text:
             continue
         if site_name.casefold() in existing_text and _chunk_substance_is_covered(chunk, existing_text):
@@ -416,20 +440,20 @@ def _sync_customer_settings_to_database(current: CustomerSettings | None = None)
     current = current or CUSTOMER_SETTINGS
     if not current.loaded or current.error:
         return
-    for site in current.sites:
-        db.upsert_site_config(
+    db.sync_site_configs(
+        [
             {
                 "name": site.name,
                 "aliases": site.aliases,
                 "notes": "customer_settings.json",
                 "is_active": site.enabled,
             }
-        )
+            for site in current.sites
+        ]
+    )
 
 
 def _group_is_watched(group_name: str) -> bool:
-    if settings.yingdao_manual_control:
-        return True
     current = _current_customer_settings()
     watched = current.whatsapp.watch_groups if current.loaded and not current.error else []
     if not watched:
@@ -442,14 +466,8 @@ def _match_enabled_customer_site(text: str) -> str:
     current = _current_customer_settings()
     if not current.loaded or current.error:
         return ""
-    normalized = str(text or "").casefold()
-    for site in current.sites:
-        if not site.enabled:
-            continue
-        candidates = [site.name, *site.aliases]
-        if any(candidate and candidate.casefold() in normalized for candidate in candidates):
-            return site.name
-    return ""
+    matched = ConfiguredSitePolicy([site for site in current.sites if site.enabled]).resolve(text)
+    return matched.site_name if matched.status == "matched" else ""
 
 
 def _site_is_watched_for_reminder(analysis: dict[str, object]) -> bool:
@@ -619,12 +637,44 @@ def _analyze_messages(messages: list[dict[str, object]], sync_feishu: bool) -> d
                     }
                 )
                 continue
+            policy = ConfiguredSitePolicy.for_group(
+                _current_customer_settings(),
+                str(merged_message.get("group_name") or ""),
+            )
+            merged_message["allowed_site_names"] = [site.name for site in policy.sites]
             analyses = deepseek.analyze_message_items(
                 message=merged_message,
                 attachments=attachments,
                 rules=rules,
             )
             analyses = _augment_analyses_with_configured_sites(analyses, merged_message, attachments, rules)
+            site_source_texts: dict[str, list[str]] = {}
+            for segment in policy.split(str(merged_message.get("text") or "")):
+                site_source_texts.setdefault(segment.site_name, []).append(segment.text)
+            categorized_analyses: list[dict[str, object]] = []
+            for raw_analysis in analyses:
+                source_text = "\n".join(
+                    site_source_texts.get(str(raw_analysis.get("site") or ""), [])
+                )
+                for category in business_categories(raw_analysis, source_text):
+                    categorized = dict(raw_analysis)
+                    categorized["business_category"] = category
+                    if category == "报价":
+                        categorized["work_type"] = "quotation"
+                    categorized_analyses.append(categorized)
+            analyses = categorized_analyses
+            if not analyses:
+                for grouped_message in grouped_messages:
+                    db.mark_message_done(grouped_message["id"])
+                skipped += 1
+                records.append(
+                    {
+                        "message_fingerprint": primary_message["message_fingerprint"],
+                        "skipped": True,
+                        "skip_reason": "configured_site_unmatched",
+                    }
+                )
+                continue
             schedules = db.list_schedules_for_message(merged_message)
             first_feishu_record_id = None
             for item_index, raw_analysis in enumerate(analyses):
@@ -675,6 +725,8 @@ def _analyze_messages(messages: list[dict[str, object]], sync_feishu: bool) -> d
                         "completion_status": analysis.get("completion_status", ""),
                         "completion_score": analysis.get("completion_score", 0),
                         "completion_level": analysis.get("completion_level", ""),
+                        "site": analysis.get("site", ""),
+                        "business_category": analysis.get("business_category", ""),
                         "reminders_created": 1 if reminder_created else 0,
                     }
                 )
@@ -756,12 +808,19 @@ def _export_daily_workbooks_for_messages(messages: list[dict[str, object]]) -> l
             work_date=work_date,
             export_root=settings.exports_root,
         )
+        classified = export_site_classified_workbooks(
+            db=db,
+            work_date=work_date,
+            output_root=settings.data_root,
+        )
         exports.append(
             {
                 "work_date": work_date,
                 "total_path": result.total_path,
                 "site_paths": result.site_paths,
                 "site_count": len(result.site_paths),
+                "classified_paths": classified.daily_paths,
+                "annual_paths": classified.annual_paths,
             }
         )
     return exports
@@ -1425,7 +1484,12 @@ def ingest_whatsapp_messages(
 ) -> dict[str, object]:
     if not _group_is_watched(payload.group_name):
         return {
-            "messages": {"inserted": 0, "skipped": 0, "filtered": len(payload.messages)},
+            "messages": {
+                "inserted": 0,
+                "skipped": 0,
+                "filtered": len(payload.messages),
+                "filtered_self": 0,
+            },
             "dispatch_schedules": {
                 "candidates": 0,
                 "inserted": 0,
@@ -1442,7 +1506,12 @@ def ingest_whatsapp_messages(
     rows = []
     fingerprints = []
     filtered = 0
+    filtered_self = 0
     for message in payload.messages:
+        if _is_current_account_message(message.sender, message.is_from_me):
+            filtered += 1
+            filtered_self += 1
+            continue
         if _is_automation_notice(message.text):
             filtered += 1
             continue
@@ -1481,8 +1550,12 @@ def ingest_whatsapp_messages(
 
     insert_result = db.insert_messages(rows)
     insert_result["filtered"] = filtered
+    insert_result["filtered_self"] = filtered_self
     new_messages = db.list_messages_by_fingerprints(new_fingerprints)
-    dispatch_result = _discover_and_save_dispatch_schedules(new_messages)
+    site_policy = ConfiguredSitePolicy.for_group(_current_customer_settings(), payload.group_name)
+    dispatch_result = _discover_and_save_dispatch_schedules(
+        [message for message in new_messages if site_policy.mentions(str(message.get("text") or ""))]
+    )
     auto_pipeline = {"scheduled": False, "reason": "no newly inserted messages"}
     if new_messages:
         auto_pipeline = _schedule_post_ingest_pipeline(
@@ -1591,11 +1664,27 @@ def whatsapp_download_jobs(
 ) -> dict[str, object]:
     jobs = []
     for job in db.list_download_jobs(limit, group_name=group_name):
+        repair_records = db.list_repair_records_for_message(int(job["id"]))
+        record_options = [
+            {
+                "repair_record_id": record["id"],
+                "site": record.get("site"),
+                "business_category": record.get("business_category"),
+                "work_type": record.get("work_type"),
+                "work_date": record.get("work_date"),
+            }
+            for record in repair_records
+            if record.get("site") and record.get("business_category")
+        ]
+        unique_sites = sorted({str(record["site"]) for record in record_options})
         work_date = _export_date_from_sent_at(str(job.get("sent_at") or "")) or str(job.get("work_date") or "")
-        site = str(job.get("site") or "unknown_site")
+        site = unique_sites[0] if len(unique_sites) == 1 else ""
+        job["site"] = site
+        job["repair_records"] = record_options
+        job["requires_record_selection"] = len(unique_sites) > 1
         job["suggested_download_dir"] = str(
             settings.downloads_root
-            / safe_part(site, "unknown_site")
+            / safe_part(site, "site_selection_required")
             / safe_part(work_date, "unknown_date")
         )
         jobs.append(job)
@@ -1622,11 +1711,18 @@ def export_daily(work_date: str = Query(min_length=10, max_length=10)) -> dict[s
         work_date=work_date,
         export_root=settings.exports_root,
     )
+    classified = export_site_classified_workbooks(
+        db=db,
+        work_date=work_date,
+        output_root=settings.data_root,
+    )
     return {
         "work_date": work_date,
         "total_path": result.total_path,
         "site_paths": result.site_paths,
         "site_count": len(result.site_paths),
+        "classified_paths": classified.daily_paths,
+        "annual_paths": classified.annual_paths,
     }
 
 
@@ -1679,10 +1775,35 @@ def ingest_attachment(
         )
         raise HTTPException(status_code=404, detail="message reference not found")
     repair_records = db.list_repair_records_for_message(message["id"])
-    matched_record = repair_records[0] if repair_records else {}
+    policy = ConfiguredSitePolicy.for_group(
+        _current_customer_settings(),
+        str(message.get("group_name") or ""),
+    )
+    selected_records = list(repair_records)
+    if payload.repair_record_id:
+        selected_records = [record for record in repair_records if int(record["id"]) == payload.repair_record_id]
+        if not selected_records:
+            raise HTTPException(status_code=400, detail="repair_record_id does not belong to message")
+    if payload.site:
+        requested_site = policy.canonical_name(payload.site)
+        if not requested_site:
+            raise HTTPException(status_code=400, detail="site is not allowed by customer_settings.json")
+        selected_records = [record for record in selected_records if record.get("site") == requested_site]
+        if not selected_records:
+            raise HTTPException(status_code=400, detail="site does not match message repair records")
+    unique_sites = {
+        str(record.get("site") or "").strip()
+        for record in selected_records
+        if str(record.get("site") or "").strip()
+    }
+    if not selected_records or not unique_sites:
+        raise HTTPException(status_code=409, detail="message has no configured site repair record")
+    if len(unique_sites) > 1:
+        raise HTTPException(status_code=409, detail="multiple sites require repair_record_id or site")
+    matched_record = selected_records[0]
     export_date = _export_date_from_sent_at(str(message.get("sent_at") or ""))
     work_date = payload.work_date or export_date or matched_record.get("work_date") or message["sent_at"][:10]
-    site = payload.site or matched_record.get("site")
+    site = next(iter(unique_sites))
     staff_name = payload.staff_name or matched_record.get("staff_name") or message["sender"]
     work_type = payload.work_type or matched_record.get("work_type")
     logger.info(
@@ -1729,7 +1850,7 @@ def ingest_attachment(
             work_type=str(work_type) if work_type else None,
             attachment_type=payload.attachment_type,
         )
-    except FileNotFoundError as exc:
+    except (FileNotFoundError, ValueError) as exc:
         logger.warning(
             "attachment file not found external_message_id=%s message_fingerprint=%s "
             "temp_path=%s downloads_root=%s detail=%s",
@@ -1753,8 +1874,42 @@ def ingest_attachment(
             "size_bytes": archived.size_bytes,
         }
     )
+    stored_attachment = db.get_attachment_by_message_sha(int(message["id"]), archived.sha256)
+    if not stored_attachment:
+        raise HTTPException(status_code=500, detail="attachment index was not created")
+    category_paths: list[str] = []
+    category_archives_inserted = 0
+    seen_category_records: set[tuple[str, str]] = set()
+    for record in selected_records:
+        category = str(record.get("business_category") or "").strip()
+        record_site = str(record.get("site") or "").strip()
+        key = (record_site, category)
+        if not record_site or not category or key in seen_category_records:
+            continue
+        seen_category_records.add(key)
+        mirrored = mirror_attachment_for_category(
+            archived.archive_path,
+            settings.data_root,
+            work_date=str(work_date),
+            site=record_site,
+            business_category=category,
+            attachment_type=payload.attachment_type,
+        )
+        if db.insert_attachment_archive(
+            {
+                "attachment_id": stored_attachment["id"],
+                "raw_message_id": message["id"],
+                "repair_record_id": record["id"],
+                "site": record_site,
+                "business_category": category,
+                "archive_filename": mirrored.archive_filename,
+                "archive_path": mirrored.archive_path,
+            }
+        ):
+            category_archives_inserted += 1
+        category_paths.append(mirrored.archive_path)
     auto_pipeline = {"scheduled": False, "reason": "attachment was already archived"}
-    if inserted:
+    if inserted or category_archives_inserted:
         db.mark_message_retry(message["id"])
         auto_pipeline = _schedule_post_ingest_pipeline(
             fingerprints=[message["message_fingerprint"]],
@@ -1775,6 +1930,8 @@ def ingest_attachment(
         "archive_path": archived.archive_path,
         "archive_filename": archived.archive_filename,
         "sha256": archived.sha256,
+        "category_archive_paths": category_paths,
+        "category_archives_inserted": category_archives_inserted,
         "auto_pipeline": auto_pipeline,
     }
 

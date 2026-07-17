@@ -3,6 +3,7 @@
   "whatsapp": {
     "use_current_logged_in_account": true,
     "global_scan_lock_enabled": true,
+    "current_account_names": ["管理员"],
 
     "groups": [
       {

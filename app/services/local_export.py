@@ -8,12 +8,19 @@ from xml.sax.saxutils import escape
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from app.services.archive import safe_part
+from app.services.site_policy import BUSINESS_CATEGORIES, QUOTATION_CATEGORY, REPAIR_CATEGORY
 
 
 @dataclass(frozen=True)
 class ExportResult:
     total_path: str
     site_paths: list[str]
+
+
+@dataclass(frozen=True)
+class ClassifiedExportResult:
+    daily_paths: list[str]
+    annual_paths: list[str]
 
 
 def export_daily_workbook(
@@ -58,6 +65,105 @@ def export_daily_workbook(
     return ExportResult(total_path=str(total_path), site_paths=site_paths)
 
 
+def export_site_classified_workbooks(
+    *,
+    db: Any,
+    work_date: str,
+    output_root: Path,
+) -> ClassifiedExportResult:
+    records = [
+        record
+        for record in db.list_export_repair_records(work_date)
+        if record.get("site") and record.get("business_category") in BUSINESS_CATEGORIES
+    ]
+    attachment_checks = db.list_export_attachment_checks(work_date)
+    reminders = db.list_export_reminders(work_date)
+    daily_paths: list[str] = []
+    annual_paths: list[str] = []
+    sites = sorted({str(record["site"]).strip() for record in records if str(record.get("site") or "").strip()})
+    for site in sites:
+        site_records = [record for record in records if record.get("site") == site]
+        for category in BUSINESS_CATEGORIES:
+            category_records = [record for record in site_records if record.get("business_category") == category]
+            if not category_records:
+                continue
+            category_dir = site_category_dir(output_root, site, work_date, category)
+            category_dir.mkdir(parents=True, exist_ok=True)
+            path = category_dir / f"{safe_part(site, 'site')}_{work_date}_{category}.xlsx"
+            record_ids = {int(record["id"]) for record in category_records}
+            category_attachments = _category_attachment_checks(attachment_checks, record_ids, category)
+            category_reminders = [
+                item
+                for item in reminders
+                if item.get("site") == site and item.get("business_category") == category
+            ]
+            _write_export_workbook(
+                path,
+                repairs=category_records,
+                attachment_checks=category_attachments,
+                reminders=category_reminders,
+                repair_sheet_name=f"{category}记录",
+            )
+            daily_paths.append(str(path))
+        annual_path = export_site_annual_workbook(db=db, year=work_date[:4], site=site, output_root=output_root)
+        annual_paths.append(str(annual_path))
+    return ClassifiedExportResult(
+        daily_paths=daily_paths,
+        annual_paths=list(dict.fromkeys(annual_paths)),
+    )
+
+
+def export_site_annual_workbook(*, db: Any, year: str, site: str, output_root: Path) -> Path:
+    records = db.list_export_repair_records_for_year(year, site)
+    attachment_checks = db.list_export_attachment_checks_for_year(year, site)
+    reminders = db.list_export_reminders_for_year(year, site)
+    repair_records = [record for record in records if record.get("business_category") == REPAIR_CATEGORY]
+    quotation_records = [record for record in records if record.get("business_category") == QUOTATION_CATEGORY]
+    valid_ids = {int(record["id"]) for record in records if record.get("business_category") in BUSINESS_CATEGORIES}
+    annual_dir = output_root / safe_part(site, "site") / safe_part(year, "year")
+    annual_dir.mkdir(parents=True, exist_ok=True)
+    path = annual_dir / f"{safe_part(site, 'site')}_{safe_part(year, 'year')}_总表.xlsx"
+    sheets = [
+        ("维修汇总", _repair_rows(repair_records)),
+        ("报价汇总", _repair_rows(quotation_records)),
+        ("附件索引", _attachment_rows(_category_attachment_checks(attachment_checks, valid_ids, None))),
+        ("提醒汇总", _reminder_rows(reminders)),
+    ]
+    write_xlsx(path, sheets)
+    return path
+
+
+def site_category_dir(root: Path, site: str, work_date: str, category: str) -> Path:
+    return (
+        root
+        / safe_part(site, "site")
+        / safe_part(work_date[:4], "year")
+        / safe_part(work_date[5:7], "month")
+        / safe_part(work_date[8:10], "day")
+        / safe_part(category, "category")
+    )
+
+
+def _category_attachment_checks(
+    records: list[dict[str, Any]],
+    record_ids: set[int],
+    category: str | None,
+) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    for record in records:
+        if int(record.get("id") or 0) not in record_ids:
+            continue
+        item = dict(record)
+        archives = [
+            archive
+            for archive in record.get("category_archives", [])
+            if category is None or archive.get("business_category") == category
+        ]
+        item["attachments"] = archives
+        result.append(item)
+    return result
+
+
 def dated_export_dir(root: Path, work_date: str) -> Path:
     year = work_date[:4] if len(work_date) >= 4 and work_date[:4].isdigit() else "unknown_year"
     month = work_date[5:7] if len(work_date) >= 7 and work_date[5:7].isdigit() else "unknown_month"
@@ -78,9 +184,10 @@ def _write_export_workbook(
     repairs: list[dict[str, Any]],
     attachment_checks: list[dict[str, Any]],
     reminders: list[dict[str, Any]],
+    repair_sheet_name: str = "维修记录",
 ) -> None:
     sheets = [
-        ("维修记录", _repair_rows(repairs)),
+        (repair_sheet_name, _repair_rows(repairs)),
         ("附件检查", _attachment_rows(attachment_checks)),
         ("提醒记录", _reminder_rows(reminders)),
     ]
@@ -96,6 +203,7 @@ def _repair_rows(records: list[dict[str, Any]]) -> list[list[Any]]:
         "同事",
         "地点",
         "工作类型",
+        "业务类别",
         "AI摘要",
         "维修结果",
         "完成状态",
@@ -116,6 +224,7 @@ def _repair_rows(records: list[dict[str, Any]]) -> list[list[Any]]:
             record.get("staff_name", ""),
             record.get("site", ""),
             record.get("work_type", ""),
+            record.get("business_category", ""),
             record.get("summary", ""),
             record.get("result", ""),
             record.get("completion_status", ""),
@@ -135,6 +244,7 @@ def _attachment_rows(records: list[dict[str, Any]]) -> list[list[Any]]:
         "实际工作日期",
         "地点",
         "同事",
+        "业务类别",
         "是否需要照片",
         "是否需要维修报告PDF",
         "已归档文件名",
@@ -151,6 +261,7 @@ def _attachment_rows(records: list[dict[str, Any]]) -> list[list[Any]]:
             record.get("work_date", ""),
             record.get("site", ""),
             record.get("staff_name", ""),
+            record.get("business_category", ""),
             "是" if _needs_photo(record) else "否",
             "是" if _needs_pdf(record) else "否",
             "\n".join(str(item.get("archive_filename") or "") for item in attachments),
@@ -167,6 +278,7 @@ def _reminder_rows(reminders: list[dict[str, Any]]) -> list[list[Any]]:
         "实际工作日期",
         "地点",
         "同事",
+        "业务类别",
         "提醒对象",
         "提醒原因",
         "提醒内容",
@@ -183,6 +295,7 @@ def _reminder_rows(reminders: list[dict[str, Any]]) -> list[list[Any]]:
             reminder.get("work_date", ""),
             reminder.get("site", ""),
             reminder.get("staff_name", ""),
+            reminder.get("business_category", ""),
             reminder.get("target_name", ""),
             reminder.get("reason", ""),
             reminder.get("content", ""),
@@ -212,13 +325,15 @@ def _needs_pdf(record: dict[str, Any]) -> bool:
 
 def write_xlsx(path: Path, sheets: list[tuple[str, list[list[Any]]]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with ZipFile(path, "w", ZIP_DEFLATED) as workbook:
+    temp_path = path.with_name(f".{path.name}.tmp")
+    with ZipFile(temp_path, "w", ZIP_DEFLATED) as workbook:
         workbook.writestr("[Content_Types].xml", _content_types(len(sheets)))
         workbook.writestr("_rels/.rels", _root_rels())
         workbook.writestr("xl/workbook.xml", _workbook_xml(sheets))
         workbook.writestr("xl/_rels/workbook.xml.rels", _workbook_rels(len(sheets)))
         for index, (_, rows) in enumerate(sheets, start=1):
             workbook.writestr(f"xl/worksheets/sheet{index}.xml", _sheet_xml(rows))
+    temp_path.replace(path)
 
 
 def _content_types(sheet_count: int) -> str:

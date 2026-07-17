@@ -27,6 +27,7 @@ REMINDER_LIMIT = 50
 ROW_XPATH = "xpath=//div[@role='row']"
 REL_CONTENT_XPATH = "xpath=.//span[contains(@class, 'selectable-text')]"
 REL_META_XPATH = "xpath=.//div[contains(@class, 'copyable-text') and @data-pre-plain-text]"
+REL_OUTGOING_XPATH = "xpath=.//*[contains(concat(' ', normalize-space(@class), ' '), ' message-out ')]"
 REL_TODAY_DIVIDER_XPATH = "xpath=.//span[normalize-space(text())='今天' or translate(normalize-space(text()), 'today', 'TODAY')='TODAY']"
 CONTAINER_SELECTOR = 'div[data-testid="conversation-panel-messages"]'
 
@@ -282,6 +283,8 @@ def extract_visible_messages(page: Any) -> list[dict[str, Any]]:
     for row in page.locator(ROW_XPATH).all():
         if row.locator(REL_TODAY_DIVIDER_XPATH).count() > 0:
             continue
+        if row.locator(REL_OUTGOING_XPATH).count() > 0:
+            continue
 
         meta_element = row.locator(REL_META_XPATH).first
         if meta_element.count() <= 0:
@@ -307,6 +310,7 @@ def extract_visible_messages(page: Any) -> list[dict[str, Any]]:
             {
                 "sender": sender or "未知",
                 "text": text,
+                "is_from_me": False,
                 "sent_at": sent_at,
                 "external_message_id": external_message_id,
                 "has_attachments": has_attachments,
@@ -370,6 +374,19 @@ def download_pending_attachments(
     failed = 0
     for job in jobs:
         try:
+            if job.get("requires_record_selection"):
+                failed += 1
+                print(
+                    "附件下载跳过：多地点消息需要明确选择 repair_record_id 或地点 "
+                    f"external_message_id={job.get('external_message_id')}"
+                )
+                continue
+            record_options = job.get("repair_records") or []
+            repair_record_id = (
+                record_options[0].get("repair_record_id")
+                if len(record_options) == 1
+                else None
+            )
             downloaded_files = download_attachment_for_message(page, job)
             if not downloaded_files:
                 failed += 1
@@ -380,6 +397,7 @@ def download_pending_attachments(
                     {
                         "external_message_id": job.get("external_message_id"),
                         "message_fingerprint": job.get("message_fingerprint"),
+                        "repair_record_id": repair_record_id,
                         "original_filename": Path(file_path).name,
                         "temp_path": str(file_path),
                         "attachment_type": attachment_type,
@@ -865,4 +883,3 @@ def get_json(url: str) -> dict[str, Any]:
     except urllib.error.HTTPError as exc:
         print(f"HTTP error {exc.code}: {exc.read().decode('utf-8', errors='replace')[:300]}")
         return {}
-

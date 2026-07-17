@@ -1,7 +1,7 @@
 from pathlib import Path
 import unittest
 
-from app.services.archive import archive_attachment, safe_part
+from app.services.archive import archive_attachment, mirror_attachment_for_category, safe_part
 
 
 class ArchiveTests(unittest.TestCase):
@@ -38,6 +38,27 @@ class ArchiveTests(unittest.TestCase):
             self.assertEqual(by_site_target.read_bytes(), b"pdf-bytes")
             self.assertTrue(archived.sha256)
             self.assertEqual(archived.size_bytes, len(b"pdf-bytes"))
+
+    def test_mirror_attachment_uses_site_first_category_path(self) -> None:
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "source.jpg"
+            source.write_bytes(b"image")
+
+            mirrored = mirror_attachment_for_category(
+                str(source),
+                root / "data",
+                work_date="2026-07-17",
+                site="地点A",
+                business_category="维修",
+                attachment_type="image",
+            )
+
+            target = Path(mirrored.archive_path)
+            self.assertEqual(target.parts[-7:], ("地点A", "2026", "07", "17", "维修", "图片", "source.jpg"))
+            self.assertEqual(target.read_bytes(), b"image")
 
 
 if __name__ == "__main__":

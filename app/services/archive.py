@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from app.services.fingerprint import file_sha256
+from app.services.site_policy import BUSINESS_CATEGORIES
 
 
 _SAFE_CHARS_RE = re.compile(r"[^0-9A-Za-z\u4e00-\u9fff\u3400-\u4dbf._-]+")
@@ -25,6 +26,14 @@ class ArchivedFile:
     sha256: str
     size_bytes: int
     original_filename: str
+
+
+@dataclass(frozen=True)
+class CategoryArchivedFile:
+    archive_path: str
+    archive_filename: str
+    site: str
+    business_category: str
 
 
 def archive_attachment(
@@ -76,4 +85,47 @@ def archive_attachment(
         sha256=digest,
         size_bytes=target.stat().st_size,
         original_filename=original_filename,
+    )
+
+
+def mirror_attachment_for_category(
+    archived_path: str,
+    output_root: Path,
+    *,
+    work_date: str,
+    site: str,
+    business_category: str,
+    attachment_type: str,
+) -> CategoryArchivedFile:
+    source = Path(archived_path)
+    if not source.exists() or not source.is_file():
+        raise FileNotFoundError(f"archived attachment not found: {source}")
+    if business_category not in BUSINESS_CATEGORIES:
+        raise ValueError(f"unsupported business category: {business_category}")
+    date_part = safe_part(work_date, "unknown_date")
+    if len(date_part) < 10 or not date_part[:4].isdigit():
+        raise ValueError("valid work_date is required for category archive")
+    site_part = safe_part(site, "")
+    if not site_part:
+        raise ValueError("valid configured site is required for category archive")
+    category_part = safe_part(business_category, "")
+    media_dir = "图片" if attachment_type == "image" else "PDF及其他附件"
+    target_dir = (
+        output_root
+        / site_part
+        / date_part[:4]
+        / date_part[5:7]
+        / date_part[8:10]
+        / category_part
+        / media_dir
+    )
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir / source.name
+    if not target.exists():
+        shutil.copy2(source, target)
+    return CategoryArchivedFile(
+        archive_path=str(target),
+        archive_filename=target.name,
+        site=site,
+        business_category=business_category,
     )

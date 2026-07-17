@@ -27,6 +27,7 @@ class CustomerConfigTests(unittest.TestCase):
                         "whatsapp": {
                             "use_current_logged_in_account": True,
                             "global_scan_lock_enabled": True,
+                            "current_account_names": ["管理员"],
                             "groups": [
                                 {
                                     "id": "group_test",
@@ -79,6 +80,7 @@ class CustomerConfigTests(unittest.TestCase):
             self.assertTrue(settings.loaded)
             self.assertEqual(settings.timezone, "Asia/Hong_Kong")
             self.assertEqual(settings.whatsapp.watch_groups, ["test"])
+            self.assertEqual(settings.whatsapp.current_account_names, ["管理员"])
             self.assertEqual(settings.whatsapp.groups[0].scan.interval_minutes, 20)
             self.assertEqual(settings.whatsapp.groups[0].scan.start_offset_seconds, 60)
             self.assertEqual(settings.whatsapp.groups[0].reminder.times, ["12:00", "18:00"])

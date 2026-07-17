@@ -55,7 +55,8 @@ class DeepSeekClient:
                         "Use Simplified Chinese labels where status text is needed. "
                         "If one WhatsApp message contains multiple independent maintenance jobs, "
                         "return one item per job in the items array. Ignore standalone photo labels "
-                        "or material labels such as 前/中/后/料 unless they include real work details."
+                        "or material labels such as 前/中/后/料 unless they include real work details. "
+                        "Use only a site from message.allowed_site_names. Split different sites into separate items."
                     ),
                 },
                 {

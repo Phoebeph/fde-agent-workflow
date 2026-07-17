@@ -48,6 +48,7 @@ class WhatsAppMessageIn(BaseModel):
     sender: str = Field(min_length=1)
     sent_at: str = Field(min_length=1, description="ISO string or WhatsApp timestamp text")
     text: str = ""
+    is_from_me: bool = False
     external_message_id: str | None = None
     has_attachments: bool = False
     attachment_hints: list[dict[str, Any]] = Field(default_factory=list)
@@ -144,6 +145,7 @@ class MockWhatsAppMessageIn(BaseModel):
 
 
 class AttachmentIn(BaseModel):
+    repair_record_id: int | None = Field(default=None, ge=1)
     message_fingerprint: str | None = Field(default=None, min_length=16)
     external_message_id: str | None = Field(default=None, min_length=1)
     original_filename: str | None = Field(default=None, min_length=1)
