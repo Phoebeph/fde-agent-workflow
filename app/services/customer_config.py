@@ -52,6 +52,7 @@ class CustomerSite:
 class CustomerWhatsAppConfig:
     use_current_logged_in_account: bool = True
     global_scan_lock_enabled: bool = True
+    current_account_names: list[str] = field(default_factory=list)
     groups: list[CustomerWhatsAppGroup] = field(default_factory=list)
     watch_groups: list[str] = field(default_factory=list)
     reminder_sender_account: str = ""
@@ -100,6 +101,20 @@ class CustomerSettings:
             if site and site.enabled and site.name not in names:
                 names.append(site.name)
         return names
+
+    def group_for_name(self, group_name: str) -> CustomerWhatsAppGroup | None:
+        normalized = str(group_name or "").strip().casefold()
+        for group in self.enabled_groups():
+            if group.name.strip().casefold() == normalized:
+                return group
+        return None
+
+    def allowed_sites_for_group(self, group_name: str) -> list[CustomerSite]:
+        group = self.group_for_name(group_name)
+        if group and group.related_site_ids:
+            allowed_ids = set(group.related_site_ids)
+            return [site for site in self.sites if site.enabled and site.id in allowed_ids]
+        return [site for site in self.sites if site.enabled]
 
 
 class CustomerSettingsStore:
@@ -183,6 +198,7 @@ def _parse_customer_settings(data: dict[str, Any], path: Path) -> CustomerSettin
         whatsapp=CustomerWhatsAppConfig(
             use_current_logged_in_account=bool(whatsapp.get("use_current_logged_in_account", True)),
             global_scan_lock_enabled=bool(whatsapp.get("global_scan_lock_enabled", True)),
+            current_account_names=_string_list(whatsapp.get("current_account_names")),
             groups=groups,
             watch_groups=watch_groups,
             reminder_sender_account=_text(whatsapp.get("reminder_sender_account")),

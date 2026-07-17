@@ -60,11 +60,12 @@ class IngestTests(unittest.TestCase):
 
         with (
             patch("app.main.db", fake_db),
+            patch("app.main._current_customer_settings", return_value=CustomerSettings(loaded=True)),
             patch("app.main._discover_and_save_dispatch_schedules", return_value={"created": 0}),
         ):
             result = ingest_whatsapp_messages(payload)
 
-        self.assertEqual(result["messages"], {"inserted": 1, "skipped": 0, "filtered": 1})
+        self.assertEqual(result["messages"], {"inserted": 1, "skipped": 0, "filtered": 1, "filtered_self": 0})
         self.assertEqual(len(fake_db.inserted_rows), 1)
         self.assertEqual(fake_db.inserted_rows[0]["sender"], "aaa")
         self.assertEqual(fake_db.inserted_rows[0]["text"], "英皇道 8樓12v火牛 換前")
@@ -88,6 +89,7 @@ class IngestTests(unittest.TestCase):
 
         with (
             patch("app.main.db", fake_db),
+            patch("app.main._current_customer_settings", return_value=CustomerSettings(loaded=True)),
             patch("app.main._discover_and_save_dispatch_schedules", return_value={"created": 0}),
             patch("app.main.message_fingerprint", return_value="existing-fingerprint"),
             patch("app.main._schedule_post_ingest_pipeline") as schedule_pipeline,
@@ -95,7 +97,7 @@ class IngestTests(unittest.TestCase):
             fake_db.existing_fingerprints = {"existing-fingerprint"}
             result = ingest_whatsapp_messages(payload, background_tasks=object())
 
-        self.assertEqual(result["messages"], {"inserted": 0, "skipped": 1, "filtered": 0})
+        self.assertEqual(result["messages"], {"inserted": 0, "skipped": 1, "filtered": 0, "filtered_self": 0})
         self.assertFalse(result["auto_pipeline"]["scheduled"])
         self.assertEqual(result["auto_pipeline"]["reason"], "no newly inserted messages")
         schedule_pipeline.assert_not_called()
@@ -116,6 +118,7 @@ class IngestTests(unittest.TestCase):
 
         with (
             patch("app.main.db", fake_db),
+            patch("app.main._current_customer_settings", return_value=CustomerSettings(loaded=True)),
             patch("app.main._discover_and_save_dispatch_schedules", return_value={"created": 0}),
             patch("app.main.message_fingerprint", return_value="new-fingerprint"),
             patch(
@@ -125,7 +128,7 @@ class IngestTests(unittest.TestCase):
         ):
             result = ingest_whatsapp_messages(payload, background_tasks=object())
 
-        self.assertEqual(result["messages"], {"inserted": 1, "skipped": 0, "filtered": 0})
+        self.assertEqual(result["messages"], {"inserted": 1, "skipped": 0, "filtered": 0, "filtered_self": 0})
         self.assertTrue(result["auto_pipeline"]["scheduled"])
         schedule_pipeline.assert_called_once()
 
@@ -151,7 +154,7 @@ class IngestTests(unittest.TestCase):
         with patch("app.main._current_customer_settings", return_value=customer_settings):
             result = ingest_whatsapp_messages(payload, background_tasks=object())
 
-        self.assertEqual(result["messages"], {"inserted": 0, "skipped": 0, "filtered": 1})
+        self.assertEqual(result["messages"], {"inserted": 0, "skipped": 0, "filtered": 1, "filtered_self": 0})
         self.assertFalse(fake_db.insert_called)
         self.assertFalse(result["auto_pipeline"]["scheduled"])
 
@@ -169,6 +172,34 @@ class IngestTests(unittest.TestCase):
             self.assertTrue(_site_is_watched_for_reminder({"site": "Repulse Bay", "summary": ""}))
             self.assertFalse(_site_is_watched_for_reminder({"site": "无关地点", "summary": ""}))
             self.assertFalse(_site_is_watched_for_reminder({"site": "其他地方", "summary": "需要跟进"}))
+
+    def test_ingest_filters_current_account_and_direction(self) -> None:
+        fake_db = FakeDatabase()
+        payload = WhatsAppMessageBatchIn.model_validate(
+            {
+                "group_name": "test",
+                "messages": [
+                    {"sender": "管理员", "sent_at": "2026-07-17 09:00", "text": "Alpha 维修"},
+                    {"sender": "Other", "sent_at": "2026-07-17 09:01", "text": "Beta 报价", "is_from_me": True},
+                    {"sender": "Brian", "sent_at": "2026-07-17 09:02", "text": "Gamma 维修"},
+                ],
+            }
+        )
+        customer_settings = CustomerSettings(
+            whatsapp=CustomerWhatsAppConfig(current_account_names=["管理员"]),
+            loaded=True,
+        )
+
+        with (
+            patch("app.main.db", fake_db),
+            patch("app.main._current_customer_settings", return_value=customer_settings),
+            patch("app.main._discover_and_save_dispatch_schedules", return_value={"created": 0}),
+        ):
+            result = ingest_whatsapp_messages(payload)
+
+        self.assertEqual(result["messages"]["filtered_self"], 2)
+        self.assertEqual(len(fake_db.inserted_rows), 1)
+        self.assertEqual(fake_db.inserted_rows[0]["sender"], "Brian")
 
 
 if __name__ == "__main__":

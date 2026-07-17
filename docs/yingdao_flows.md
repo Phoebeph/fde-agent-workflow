@@ -27,6 +27,7 @@ Body:
   "messages": [
     {
       "sender": "Kei",
+      "is_from_me": false,
       "sent_at": "2026-06-10 18:21",
       "text": "商场LY 例检完成",
       "external_message_id": "维修工作群|Kei|2026-06-10 18:21|商场LY 例检完成|0",
@@ -50,7 +51,7 @@ Body:
 - `dispatch_schedules.auto_converted_issues`：后续派工消息自动确认并转成正式任务的问题线索。
 - `dispatch_schedules.followup_events`：跟进、追问、缺资料等任务事件。
 
-影刀不需要判断业务含义，只要稳定提交原始消息。后端负责去重、派工识别、问题线索、维修汇报分析和提醒生成。
+影刀应先跳过 WhatsApp Web 中的 `message-out` 气泡，并对提交的其他消息传 `is_from_me: false`。后端还会根据 `customer_settings.json` 中的 `current_account_names` 再次过滤当前账号消息。业务含义、地点拆分、去重、派工识别和提醒仍由后端负责。
 
 `external_message_id` 优先使用 WhatsApp 内部消息 ID。拿不到内部 ID 时，建议影刀生成：
 
@@ -122,6 +123,7 @@ Body:
 ```json
 {
   "message_fingerprint": "sha256-from-download-job",
+  "repair_record_id": 123,
   "attachment_type": "pdf",
   "staff_name": "Kei",
   "site": "商场LY",
@@ -132,7 +134,7 @@ Body:
 
 `original_filename` 和 `temp_path` 可选；后端会在下载目录中自动定位最新匹配文件，并为图片/PDF 生成或保留合适的原始文件名。
 
-附件扫描和附件下载分两步：扫描阶段只提交 `has_attachments` 和 `attachment_hints`，下载阶段再按 `message_fingerprint` 找回 WhatsApp 消息并下载文件。
+附件扫描和附件下载分两步：扫描阶段只提交 `has_attachments` 和 `attachment_hints`，下载阶段再按 `message_fingerprint` 找回 WhatsApp 消息并下载文件。多地点消息必须传下载任务返回的 `repair_record_id` 或明确的规范地点。
 
 SQLite 只保存附件文件名、路径、hash 和类型，不保存图片/PDF 二进制内容。
 

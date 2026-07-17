@@ -58,6 +58,73 @@ class DatabaseTests(unittest.TestCase):
             attachments = db.list_attachments_for_message(stored["id"])
             self.assertEqual(attachments[0]["archive_filename"], "2026-06-10_site_Kei_work_image_abcd.jpg")
 
+    def test_one_attachment_can_index_repair_and_quotation_copies(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db = Database(Path(temp_dir) / "test.db")
+            db.init()
+            db.insert_messages(
+                [
+                    {
+                        "group_name": "维修群",
+                        "sender": "Kei",
+                        "sent_at": "2026-06-10 18:00",
+                        "text": "地点A 维修并报价",
+                        "message_fingerprint": "m" * 64,
+                        "has_attachments": True,
+                        "attachment_hints": [],
+                        "raw_payload": {},
+                    }
+                ]
+            )
+            message = db.get_message_by_fingerprint("m" * 64)
+            repair_id = db.save_repair_record(
+                message["id"],
+                {"site": "地点A", "business_category": "维修", "summary": "维修"},
+                item_index=0,
+            )
+            quotation_id = db.save_repair_record(
+                message["id"],
+                {"site": "地点A", "business_category": "报价", "summary": "报价"},
+                item_index=1,
+            )
+            db.insert_attachment(
+                {
+                    "raw_message_id": message["id"],
+                    "original_filename": "photo.jpg",
+                    "original_path": "/tmp/photo.jpg",
+                    "archive_filename": "photo.jpg",
+                    "archive_path": "/archive/photo.jpg",
+                    "attachment_type": "image",
+                    "sha256": "n" * 64,
+                    "size_bytes": 12,
+                }
+            )
+            attachment = db.get_attachment_by_message_sha(message["id"], "n" * 64)
+
+            for record_id, category in ((repair_id, "维修"), (quotation_id, "报价")):
+                self.assertTrue(
+                    db.insert_attachment_archive(
+                        {
+                            "attachment_id": attachment["id"],
+                            "raw_message_id": message["id"],
+                            "repair_record_id": record_id,
+                            "site": "地点A",
+                            "business_category": category,
+                            "archive_filename": f"{category}.jpg",
+                            "archive_path": f"/archive/{category}.jpg",
+                        }
+                    )
+                )
+
+            self.assertEqual(
+                db.list_attachment_archives_for_record(repair_id)[0]["business_category"],
+                "维修",
+            )
+            self.assertEqual(
+                db.list_attachment_archives_for_record(quotation_id)[0]["business_category"],
+                "报价",
+            )
+
     def test_download_jobs_wait_for_analysis_done(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             db = Database(Path(temp_dir) / "test.db")
@@ -670,6 +737,25 @@ class DatabaseTests(unittest.TestCase):
             self.assertEqual(db.match_site_in_text("L322 Project Room red light")["name"], "LPP")
             self.assertTrue(db.set_site_active(site_id, False))
             self.assertIsNone(db.match_site_in_text("L322 Project Room red light"))
+
+    def test_sync_site_configs_deactivates_removed_sites(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db = Database(Path(temp_dir) / "test.db")
+            db.init()
+            db.sync_site_configs(
+                [
+                    {"name": "地点A", "aliases": ["Alpha"], "is_active": True},
+                    {"name": "地点B", "aliases": ["Beta"], "is_active": True},
+                ]
+            )
+            db.sync_site_configs(
+                [{"name": "地点A", "aliases": ["Alpha New"], "is_active": True}]
+            )
+
+            sites = {site["name"]: site for site in db.list_site_configs()}
+            self.assertTrue(sites["地点A"]["is_active"])
+            self.assertFalse(sites["地点B"]["is_active"])
+            self.assertEqual(sites["地点A"]["aliases"], ["Alpha New"])
 
     def test_init_repairs_reminders_foreign_key_to_old_repair_table(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

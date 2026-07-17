@@ -128,7 +128,7 @@ class AttachmentLoggingTests(unittest.TestCase):
             attachments = db.list_attachments_for_message(message["id"])
             self.assertEqual(len(attachments), 1)
             self.assertEqual(attachments[0]["original_filename"], "2026-06-10_Kei_image.png")
-            self.assertIn("2026/06/10/unknown_site", attachments[0]["archive_path"])
+            self.assertIn("2026/06/10/The_Upper_House_PA", attachments[0]["archive_path"])
             self.assertTrue(Path(attachments[0]["archive_path"]).exists())
             log_text = _read_log(log_path)
             self.assertIn("strategy=downloads_root_scan", log_text)
@@ -230,6 +230,19 @@ def _database_with_attachment_message(root: Path, fingerprint: str, external_id:
                 "raw_payload": {},
             }
         ]
+    )
+    message = db.get_message_by_external_id(external_id)
+    db.save_repair_record(
+        int(message["id"]),
+        {
+            "work_date": "2026-06-10",
+            "staff_name": "Kei",
+            "site": "The Upper House PA",
+            "work_type": "维修",
+            "business_category": "维修",
+            "summary": "完成，附相",
+            "result": "已完成",
+        },
     )
     return db
 

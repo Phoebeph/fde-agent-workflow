@@ -108,6 +108,9 @@ downloads\  影刀临时下载目录
 logs\       后端和影刀日志
 backups\    数据库备份
 YYYY\MM\DD\ 按日期、地点归档附件和 Excel
+地点\YYYY\MM\DD\维修\  按地点镜像的维修 Excel 和附件
+地点\YYYY\MM\DD\报价\  按地点镜像的报价 Excel 和附件
+地点\YYYY\地点_YYYY_总表.xlsx  地点年度汇总
 ```
 
 更详细的客户电脑目录和打包部署建议见 `docs/local_customer_deployment.md`。

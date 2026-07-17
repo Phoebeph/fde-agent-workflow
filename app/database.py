@@ -121,6 +121,7 @@ CREATE TABLE IF NOT EXISTS repair_records (
     staff_name TEXT,
     site TEXT,
     work_type TEXT,
+    business_category TEXT NOT NULL DEFAULT '维修',
     summary TEXT NOT NULL DEFAULT '',
     result TEXT NOT NULL DEFAULT '',
     completion_status TEXT NOT NULL DEFAULT '待人工确认',
@@ -139,6 +140,25 @@ CREATE TABLE IF NOT EXISTS repair_records (
 
 CREATE INDEX IF NOT EXISTS idx_repair_records_status ON repair_records(completion_status);
 CREATE INDEX IF NOT EXISTS idx_repair_records_date_staff ON repair_records(work_date, staff_name);
+
+CREATE TABLE IF NOT EXISTS attachment_archives (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    attachment_id INTEGER NOT NULL,
+    raw_message_id INTEGER NOT NULL,
+    repair_record_id INTEGER,
+    site TEXT NOT NULL,
+    business_category TEXT NOT NULL,
+    archive_filename TEXT NOT NULL,
+    archive_path TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY(attachment_id) REFERENCES attachments(id) ON DELETE CASCADE,
+    FOREIGN KEY(raw_message_id) REFERENCES raw_messages(id) ON DELETE CASCADE,
+    FOREIGN KEY(repair_record_id) REFERENCES repair_records(id) ON DELETE SET NULL,
+    UNIQUE(attachment_id, raw_message_id, site, business_category)
+);
+
+CREATE INDEX IF NOT EXISTS idx_attachment_archives_attachment ON attachment_archives(attachment_id);
+CREATE INDEX IF NOT EXISTS idx_attachment_archives_record ON attachment_archives(repair_record_id);
 
 CREATE TABLE IF NOT EXISTS reminders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -350,6 +370,19 @@ class Database:
                     "UPDATE attachments SET archive_filename = ? WHERE id = ?",
                     (Path(row["archive_path"]).name, row["id"]),
                 )
+        attachment_archive_columns = {
+            row["name"] for row in conn.execute("PRAGMA table_info(attachment_archives)").fetchall()
+        }
+        if "raw_message_id" not in attachment_archive_columns:
+            conn.execute("ALTER TABLE attachment_archives ADD COLUMN raw_message_id INTEGER")
+            conn.execute(
+                """
+                UPDATE attachment_archives
+                SET raw_message_id = (
+                    SELECT raw_message_id FROM attachments WHERE attachments.id = attachment_archives.attachment_id
+                )
+                """
+            )
         staff_columns = {
             row["name"] for row in conn.execute("PRAGMA table_info(staff)").fetchall()
         }
@@ -382,6 +415,8 @@ class Database:
             conn.execute("ALTER TABLE repair_records ADD COLUMN completion_level TEXT NOT NULL DEFAULT ''")
         if "item_index" not in repair_columns:
             conn.execute("ALTER TABLE repair_records ADD COLUMN item_index INTEGER NOT NULL DEFAULT 0")
+        if "business_category" not in repair_columns:
+            conn.execute("ALTER TABLE repair_records ADD COLUMN business_category TEXT NOT NULL DEFAULT '维修'")
         indexes = conn.execute("PRAGMA index_list(repair_records)").fetchall()
         unique_columns = {
             tuple(
@@ -435,6 +470,7 @@ class Database:
         )
 
     def _rebuild_repair_records_for_multiple_items(self, conn: sqlite3.Connection) -> None:
+        conn.execute("DROP TABLE IF EXISTS attachment_archives")
         conn.execute("ALTER TABLE repair_records RENAME TO repair_records_old")
         conn.execute(
             """
@@ -447,6 +483,7 @@ class Database:
                 staff_name TEXT,
                 site TEXT,
                 work_type TEXT,
+                business_category TEXT NOT NULL DEFAULT '维修',
                 summary TEXT NOT NULL DEFAULT '',
                 result TEXT NOT NULL DEFAULT '',
                 completion_status TEXT NOT NULL DEFAULT '待人工确认',
@@ -468,17 +505,18 @@ class Database:
             row["name"] for row in conn.execute("PRAGMA table_info(repair_records_old)").fetchall()
         }
         item_expr = "item_index" if "item_index" in old_columns else "0"
+        category_expr = "business_category" if "business_category" in old_columns else "'维修'"
         conn.execute(
             f"""
             INSERT INTO repair_records (
                 id, raw_message_id, item_index, work_schedule_id, work_date, staff_name, site,
-                work_type, summary, result, completion_status, completion_score,
+                work_type, business_category, summary, result, completion_status, completion_score,
                 completion_level, missing_items_json, next_actions_json, feishu_record_id,
                 human_review_status, created_at, updated_at
             )
             SELECT
                 id, raw_message_id, {item_expr}, work_schedule_id, work_date, staff_name, site,
-                work_type, summary, result, completion_status, completion_score,
+                work_type, {category_expr}, summary, result, completion_status, completion_score,
                 completion_level, missing_items_json, next_actions_json, feishu_record_id,
                 human_review_status, created_at, updated_at
             FROM repair_records_old
@@ -487,6 +525,27 @@ class Database:
         conn.execute("DROP TABLE repair_records_old")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_repair_records_status ON repair_records(completion_status)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_repair_records_date_staff ON repair_records(work_date, staff_name)")
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS attachment_archives (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                attachment_id INTEGER NOT NULL,
+                raw_message_id INTEGER NOT NULL,
+                repair_record_id INTEGER,
+                site TEXT NOT NULL,
+                business_category TEXT NOT NULL,
+                archive_filename TEXT NOT NULL,
+                archive_path TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(attachment_id) REFERENCES attachments(id) ON DELETE CASCADE,
+                FOREIGN KEY(raw_message_id) REFERENCES raw_messages(id) ON DELETE CASCADE,
+                FOREIGN KEY(repair_record_id) REFERENCES repair_records(id) ON DELETE SET NULL,
+                UNIQUE(attachment_id, raw_message_id, site, business_category)
+            );
+            CREATE INDEX IF NOT EXISTS idx_attachment_archives_attachment ON attachment_archives(attachment_id);
+            CREATE INDEX IF NOT EXISTS idx_attachment_archives_record ON attachment_archives(repair_record_id);
+            """
+        )
         self._rebuild_reminders_after_repair_records_migration(conn)
 
     def _rebuild_reminders_after_repair_records_migration(self, conn: sqlite3.Connection) -> None:
@@ -778,6 +837,59 @@ class Database:
             )
         return bool(cur.rowcount)
 
+    def get_attachment_by_message_sha(self, raw_message_id: int, sha256: str) -> dict[str, Any] | None:
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM attachments WHERE raw_message_id = ? AND sha256 = ? LIMIT 1",
+                (raw_message_id, sha256),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def insert_attachment_archive(self, archive: dict[str, Any]) -> bool:
+        with self.connect() as conn:
+            cur = conn.execute(
+                """
+                INSERT OR IGNORE INTO attachment_archives (
+                    attachment_id, raw_message_id, repair_record_id, site, business_category,
+                    archive_filename, archive_path, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    archive["attachment_id"],
+                    archive["raw_message_id"],
+                    archive.get("repair_record_id"),
+                    archive["site"],
+                    archive["business_category"],
+                    archive["archive_filename"],
+                    archive["archive_path"],
+                    utc_now(),
+                ),
+            )
+        return bool(cur.rowcount)
+
+    def list_attachment_archives_for_record(self, repair_record_id: int) -> list[dict[str, Any]]:
+        with self.connect() as conn:
+            record = conn.execute(
+                "SELECT raw_message_id, site, business_category FROM repair_records WHERE id = ?",
+                (repair_record_id,),
+            ).fetchone()
+            if not record or not record["raw_message_id"]:
+                return []
+            rows = conn.execute(
+                """
+                SELECT aa.*, a.attachment_type, a.original_filename, a.sha256, a.size_bytes
+                FROM attachment_archives aa
+                JOIN attachments a ON a.id = aa.attachment_id
+                WHERE aa.raw_message_id = ?
+                  AND aa.site = ?
+                  AND aa.business_category = ?
+                ORDER BY aa.id ASC
+                """,
+                (record["raw_message_id"], record["site"], record["business_category"]),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
     def upsert_rules(self, rules: list[dict[str, Any]]) -> dict[str, int]:
         inserted = 0
         updated = 0
@@ -1004,6 +1116,41 @@ class Database:
             )
             row = conn.execute("SELECT id FROM sites WHERE name = ?", (site["name"],)).fetchone()
         return int(row["id"])
+
+    def sync_site_configs(self, sites: list[dict[str, Any]]) -> None:
+        now = utc_now()
+        names = [str(site.get("name") or "").strip() for site in sites if str(site.get("name") or "").strip()]
+        with self.connect() as conn:
+            for site in sites:
+                name = str(site.get("name") or "").strip()
+                if not name:
+                    continue
+                conn.execute(
+                    """
+                    INSERT INTO sites (name, aliases_json, notes, is_active, updated_at, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(name) DO UPDATE SET
+                        aliases_json = excluded.aliases_json,
+                        notes = excluded.notes,
+                        is_active = excluded.is_active,
+                        updated_at = excluded.updated_at
+                    """,
+                    (
+                        name,
+                        dumps(site.get("aliases", []) or []),
+                        site.get("notes", ""),
+                        1 if site.get("is_active", True) else 0,
+                        now,
+                        now,
+                    ),
+                )
+            if names:
+                conn.execute(
+                    f"UPDATE sites SET is_active = 0, updated_at = ? WHERE name NOT IN ({','.join('?' for _ in names)})",
+                    (now, *names),
+                )
+            else:
+                conn.execute("UPDATE sites SET is_active = 0, updated_at = ?", (now,))
 
     def set_site_active(self, site_id: int, is_active: bool) -> bool:
         with self.connect() as conn:
@@ -1653,18 +1800,19 @@ class Database:
                 """
                 INSERT INTO repair_records (
                     raw_message_id, item_index, work_schedule_id, work_date, staff_name, site,
-                    work_type, summary, result, completion_status,
+                    work_type, business_category, summary, result, completion_status,
                     completion_score, completion_level,
                     missing_items_json, next_actions_json, feishu_record_id,
                     created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(raw_message_id, item_index) DO UPDATE SET
                     work_schedule_id = excluded.work_schedule_id,
                     work_date = excluded.work_date,
                     staff_name = excluded.staff_name,
                     site = excluded.site,
                     work_type = excluded.work_type,
+                    business_category = excluded.business_category,
                     summary = excluded.summary,
                     result = excluded.result,
                     completion_status = excluded.completion_status,
@@ -1683,6 +1831,7 @@ class Database:
                     analysis.get("staff_name"),
                     analysis.get("site"),
                     analysis.get("work_type"),
+                    analysis.get("business_category", "维修"),
                     analysis.get("summary", ""),
                     analysis.get("result", ""),
                     analysis.get("completion_status", "待人工确认"),
@@ -1810,6 +1959,7 @@ class Database:
                         ).fetchall()
                     ]
                 record["attachments"] = attachments
+                record["category_archives"] = self.list_attachment_archives_for_record(int(record["id"]))
         return records
 
     def list_export_reminders(self, work_date: str, site: str | None = None) -> list[dict[str, Any]]:
@@ -1827,6 +1977,7 @@ class Database:
                     rr.work_date,
                     rr.staff_name,
                     rr.site,
+                    rr.business_category,
                     rr.summary,
                     rr.completion_status
                 FROM reminders r
@@ -1846,6 +1997,89 @@ class Database:
                 str(reminder.get("work_date") or ""),
             )
             if reminder["export_date"] != work_date:
+                continue
+            reminder["result_payload"] = loads(reminder.pop("result_payload_json", "{}"), {})
+            reminders.append(reminder)
+        return reminders
+
+    def list_export_repair_records_for_year(self, year: str, site: str) -> list[dict[str, Any]]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT
+                    rr.*,
+                    rm.sent_at AS raw_export_sent_at,
+                    rm.sent_at AS whatsapp_sent_at,
+                    rm.sender AS whatsapp_sender,
+                    rm.text AS whatsapp_text,
+                    rm.message_fingerprint,
+                    ws.task_text AS schedule_task_text
+                FROM repair_records rr
+                LEFT JOIN raw_messages rm ON rm.id = rr.raw_message_id
+                LEFT JOIN work_schedules ws ON ws.id = rr.work_schedule_id
+                WHERE COALESCE(rr.site, '') = ?
+                ORDER BY COALESCE(rm.sent_at, rr.work_date), rr.id
+                """,
+                (site,),
+            ).fetchall()
+        records = []
+        for row in rows:
+            record = dict(row)
+            record["export_date"] = _normalized_export_date(
+                str(record.pop("raw_export_sent_at") or ""),
+                str(record.get("work_date") or ""),
+            )
+            if not record["export_date"].startswith(f"{year}-"):
+                continue
+            record["missing_items"] = loads(record.pop("missing_items_json", "[]"), [])
+            record["next_actions"] = loads(record.pop("next_actions_json", "[]"), [])
+            records.append(record)
+        return records
+
+    def list_export_attachment_checks_for_year(self, year: str, site: str) -> list[dict[str, Any]]:
+        records = self.list_export_repair_records_for_year(year, site)
+        with self.connect() as conn:
+            for record in records:
+                raw_message_id = record.get("raw_message_id")
+                record["attachments"] = [
+                    dict(row)
+                    for row in conn.execute(
+                        "SELECT * FROM attachments WHERE raw_message_id = ? ORDER BY id ASC",
+                        (raw_message_id,),
+                    ).fetchall()
+                ] if raw_message_id else []
+                record["category_archives"] = self.list_attachment_archives_for_record(int(record["id"]))
+        return records
+
+    def list_export_reminders_for_year(self, year: str, site: str) -> list[dict[str, Any]]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT
+                    r.*,
+                    rm.sent_at AS raw_export_sent_at,
+                    rr.work_date,
+                    rr.staff_name,
+                    rr.site,
+                    rr.business_category,
+                    rr.summary,
+                    rr.completion_status
+                FROM reminders r
+                JOIN repair_records rr ON rr.id = r.repair_record_id
+                LEFT JOIN raw_messages rm ON rm.id = rr.raw_message_id
+                WHERE COALESCE(rr.site, '') = ?
+                ORDER BY COALESCE(rm.sent_at, rr.work_date), r.id
+                """,
+                (site,),
+            ).fetchall()
+        reminders = []
+        for row in rows:
+            reminder = dict(row)
+            reminder["export_date"] = _normalized_export_date(
+                str(reminder.pop("raw_export_sent_at") or ""),
+                str(reminder.get("work_date") or ""),
+            )
+            if not reminder["export_date"].startswith(f"{year}-"):
                 continue
             reminder["result_payload"] = loads(reminder.pop("result_payload_json", "{}"), {})
             reminders.append(reminder)
@@ -1907,7 +2141,7 @@ class Database:
                 conn.execute(
                     """
                     UPDATE repair_records
-                    SET work_date = ?, staff_name = ?, site = ?, work_type = ?,
+                    SET work_date = ?, staff_name = ?, site = ?, work_type = ?, business_category = ?,
                         summary = ?, result = ?, completion_status = ?,
                         completion_score = ?, completion_level = ?,
                         missing_items_json = ?, next_actions_json = ?,
@@ -1920,6 +2154,7 @@ class Database:
                         analysis.get("staff_name"),
                         analysis.get("site"),
                         analysis.get("work_type"),
+                        analysis.get("business_category", "维修"),
                         analysis.get("summary", ""),
                         analysis.get("result", ""),
                         analysis.get("completion_status", "未回复"),
@@ -1937,12 +2172,12 @@ class Database:
                 """
                 INSERT INTO repair_records (
                     raw_message_id, work_schedule_id, work_date, staff_name, site,
-                    work_type, summary, result, completion_status,
+                    work_type, business_category, summary, result, completion_status,
                     completion_score, completion_level,
                     missing_items_json, next_actions_json, feishu_record_id,
                     created_at, updated_at
                 )
-                VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     schedule["id"],
@@ -1950,6 +2185,7 @@ class Database:
                     analysis.get("staff_name"),
                     analysis.get("site"),
                     analysis.get("work_type"),
+                    analysis.get("business_category", "维修"),
                     analysis.get("summary", ""),
                     analysis.get("result", ""),
                     analysis.get("completion_status", "未回复"),

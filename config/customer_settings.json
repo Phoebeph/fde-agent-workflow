@@ -3,70 +3,1845 @@
   "whatsapp": {
     "use_current_logged_in_account": true,
     "global_scan_lock_enabled": true,
-
+    "current_account_names": [
+      "管理员"
+    ],
     "groups": [
       {
         "id": "group_test",
         "name": "test",
         "enabled": true,
-
         "scan": {
           "enabled": true,
           "interval_minutes": 20,
           "start_offset_seconds": 0,
           "skip_if_previous_scan_running": true
         },
-
         "reminder": {
           "enabled": true,
-          "days_of_week": ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"],
-          "times": ["12:00", "18:00"],
+          "days_of_week": [
+            "MON",
+            "TUE",
+            "WED",
+            "THU",
+            "FRI",
+            "SAT",
+            "SUN"
+          ],
+          "times": [
+            "12:00",
+            "18:00"
+          ],
           "max_reminders_per_event_per_day": 2,
           "skip_completed_events": true
         },
-
-        "related_site_ids": ["site_repulse_bay", "site_lpp"]
+        "related_site_ids": [
+          "site_the_upper_house_pa",
+          "site_one_island_east",
+          "site_the_mall",
+          "site_lincoln_house",
+          "site_oxford_house",
+          "site_festival_walk",
+          "site_lee_garden_five",
+          "site_lee_garden_six",
+          "site_8_qre_generali_tower",
+          "site_five_pacific_place",
+          "site_ubs_ag_credit_suisse",
+          "site_lee_garden_two",
+          "site_the_grandiose",
+          "site_midtown_soundwill_plaza_ii",
+          "site_east_apartments",
+          "site_atal_yau_tong_alarm_cctv",
+          "site_aia_central_fin_light",
+          "site_gateway",
+          "site_eagle_harbour_public_carpark",
+          "site_the_wave",
+          "site_td_tower",
+          "site_the_forest_k28_skypark_led_tv_display_wall",
+          "site_k11_atelier_h3_elv",
+          "site_k11_atelier_h3_security_gate",
+          "site_the_pavilia_bay",
+          "site_one_two_exchange_square",
+          "site_lee_garden_three",
+          "site_cullinan_west",
+          "site_one_taikoo_place",
+          "site_hong_kong_children_s_hospital_broadcast_reception",
+          "site_hsbc_mty",
+          "site_lee_garden_three_fa_ade_podium_lighting",
+          "site_parc_city",
+          "site_the_capitol",
+          "site_festival_walk_pa_cctv_smatv_cabd",
+          "site_k11_musea_elv",
+          "site_k11_musea_security_gate",
+          "site_rosewood_hotel_k11_artus",
+          "site_hku_space_po_leung_kuk_stanley_ho_community_college",
+          "site_landmark_east",
+          "site_le_prestige",
+          "site_asm",
+          "site_hkbh",
+          "site_citylink_plaza_cctv",
+          "site_city_point",
+          "site_citywalk_led_wall",
+          "site_the_entrance",
+          "site_avenue_of_stars_salisbury_garden",
+          "site_festival_city",
+          "site_cdw_building_people_counting",
+          "site_the_hari_330_lockhart_road",
+          "site_pacific_place_acs_at_lg1",
+          "site_pacific_place_cctv",
+          "site_telford_plaza_i_ii",
+          "site_hang_seng_tower",
+          "site_mtr_headquarters_building",
+          "site_maritime_square_i_ii",
+          "site_popcorn_1_2",
+          "site_the_lane",
+          "site_the_lohas",
+          "site_york_house_access_gates",
+          "site_jardine_house_access_gates",
+          "site_lee_garden_one_cctv",
+          "site_one_hysan_avenue_cctv",
+          "site_hysan_place_cctv",
+          "site_hkis_cctv",
+          "site_hkis_cctv_2",
+          "site_hkis_acs_cctv",
+          "site_hkis_acs_cctv_2",
+          "site_plaza_ascot_cctv",
+          "site_ocean_walk_cctv",
+          "site_hanford_plaza_cctv",
+          "site_stmc_cctv",
+          "site_gloucester_tower_smatv",
+          "site_edinburgh_tower_smatv",
+          "site_york_house_smatv",
+          "site_alexandra_house_smatv",
+          "site_prince_s_building_smatv",
+          "site_chater_house_smatv",
+          "site_jardine_house_smatv",
+          "site_exchange_square_smatv",
+          "site_the_forum_smatv",
+          "site_the_upper_house_cabd",
+          "site_luk_yeung_galleria_cctv",
+          "site_paradise_mall_cctv",
+          "site_centre_for_health_protection_for_ha",
+          "site_montara",
+          "site_stmc_elv",
+          "site_lee_garden_two_30_f_31_f_gallagher",
+          "site_metro_town",
+          "site_elements",
+          "site_iclub",
+          "site_iclub_2",
+          "site_iclub_3",
+          "site_iclub_4",
+          "site_iclub_5",
+          "site_lp10",
+          "site_two_taikoo_place",
+          "site_sheraton_hong_kong_tung_chung_hotel",
+          "site_k11_atelier_king_s_road",
+          "site_villa_lucca",
+          "site_hku_space_kec",
+          "site_hku_space_kwc",
+          "site_hku_space_unc",
+          "site_tbay",
+          "site_hemera",
+          "site_greenview_villa",
+          "site_malibu_5",
+          "site_la_marina",
+          "site_sol_city",
+          "site_the_wai_elv",
+          "site_lohas_park",
+          "site_luk_yeung_sun_chuen",
+          "site_8_clear_water_bay_road_8",
+          "site_five_pacific_place_turnstile",
+          "site_lp6",
+          "site_central_park_park_avenue",
+          "site_island_harbourview",
+          "site_harbour_green",
+          "site_the_upper_house_cctv",
+          "site_united_christian_hospital",
+          "site_choi_hung_carpark_ad_hoc",
+          "site_hunghom_carpark_ad_hoc",
+          "site_trackside_villas_ad_hoc",
+          "site_the_riverpark_8_ad_hoc",
+          "site_plaza_ascot_elv_ad_hoc",
+          "site_hanford_plaza_elv_ad_hoc",
+          "site_luk_yeung_galleria_elv",
+          "site_ocean_walk_elv",
+          "site_paradise_mall_elv",
+          "site_citylink_plaza_elv",
+          "site_montego_bay",
+          "site_the_southside",
+          "site_the_southside_parking_guiding_system_pgs_ad_hoc",
+          "site_elements_parking_guiding_system_pgs_ad_hoc",
+          "site_jardine_house_turnstile_vms",
+          "site_chater_house_turnstile_vms",
+          "site_alexandra_house_turnstile_vms",
+          "site_york_house_turnstile_vms",
+          "site_seaview_crescent",
+          "site_six_pacific_place_pv",
+          "site_six_pacific_place_elv",
+          "site_83_king_lam_street_83",
+          "site_aia_urban_campus",
+          "site_cheung_kong_center_2",
+          "site_atal_tower",
+          "site_the_henderson",
+          "site_ontolo",
+          "site_hysan_place_elv",
+          "site_hsbc_skm",
+          "site_three_pacific_place_sg_turnstile",
+          "site_the_palazzo",
+          "site_in_one",
+          "site_the_austin",
+          "site_the_harbourside",
+          "site_the_waterfront",
+          "site_sorrento",
+          "site_gopc"
+        ]
       },
       {
         "id": "group_maintenance_a",
         "name": "工作安排",
         "enabled": true,
-
         "scan": {
           "enabled": false,
           "interval_minutes": 30,
           "start_offset_seconds": 180,
           "skip_if_previous_scan_running": true
         },
-
         "reminder": {
           "enabled": false,
-          "days_of_week": ["MON", "TUE", "WED", "THU", "FRI"],
-          "times": ["12:15", "18:15"],
+          "days_of_week": [
+            "MON",
+            "TUE",
+            "WED",
+            "THU",
+            "FRI"
+          ],
+          "times": [
+            "12:15",
+            "18:15"
+          ],
           "max_reminders_per_event_per_day": 2,
           "skip_completed_events": true
         },
-
-        "related_site_ids": ["site_repulse_bay"]
+        "related_site_ids": [
+          "site_the_upper_house_pa",
+          "site_one_island_east",
+          "site_the_mall",
+          "site_lincoln_house",
+          "site_oxford_house",
+          "site_festival_walk",
+          "site_lee_garden_five",
+          "site_lee_garden_six",
+          "site_8_qre_generali_tower",
+          "site_five_pacific_place",
+          "site_ubs_ag_credit_suisse",
+          "site_lee_garden_two",
+          "site_the_grandiose",
+          "site_midtown_soundwill_plaza_ii",
+          "site_east_apartments",
+          "site_atal_yau_tong_alarm_cctv",
+          "site_aia_central_fin_light",
+          "site_gateway",
+          "site_eagle_harbour_public_carpark",
+          "site_the_wave",
+          "site_td_tower",
+          "site_the_forest_k28_skypark_led_tv_display_wall",
+          "site_k11_atelier_h3_elv",
+          "site_k11_atelier_h3_security_gate",
+          "site_the_pavilia_bay",
+          "site_one_two_exchange_square",
+          "site_lee_garden_three",
+          "site_cullinan_west",
+          "site_one_taikoo_place",
+          "site_hong_kong_children_s_hospital_broadcast_reception",
+          "site_hsbc_mty",
+          "site_lee_garden_three_fa_ade_podium_lighting",
+          "site_parc_city",
+          "site_the_capitol",
+          "site_festival_walk_pa_cctv_smatv_cabd",
+          "site_k11_musea_elv",
+          "site_k11_musea_security_gate",
+          "site_rosewood_hotel_k11_artus",
+          "site_hku_space_po_leung_kuk_stanley_ho_community_college",
+          "site_landmark_east",
+          "site_le_prestige",
+          "site_asm",
+          "site_hkbh",
+          "site_citylink_plaza_cctv",
+          "site_city_point",
+          "site_citywalk_led_wall",
+          "site_the_entrance",
+          "site_avenue_of_stars_salisbury_garden",
+          "site_festival_city",
+          "site_cdw_building_people_counting",
+          "site_the_hari_330_lockhart_road",
+          "site_pacific_place_acs_at_lg1",
+          "site_pacific_place_cctv",
+          "site_telford_plaza_i_ii",
+          "site_hang_seng_tower",
+          "site_mtr_headquarters_building",
+          "site_maritime_square_i_ii",
+          "site_popcorn_1_2",
+          "site_the_lane",
+          "site_the_lohas",
+          "site_york_house_access_gates",
+          "site_jardine_house_access_gates",
+          "site_lee_garden_one_cctv",
+          "site_one_hysan_avenue_cctv",
+          "site_hysan_place_cctv",
+          "site_hkis_cctv",
+          "site_hkis_cctv_2",
+          "site_hkis_acs_cctv",
+          "site_hkis_acs_cctv_2",
+          "site_plaza_ascot_cctv",
+          "site_ocean_walk_cctv",
+          "site_hanford_plaza_cctv",
+          "site_stmc_cctv",
+          "site_gloucester_tower_smatv",
+          "site_edinburgh_tower_smatv",
+          "site_york_house_smatv",
+          "site_alexandra_house_smatv",
+          "site_prince_s_building_smatv",
+          "site_chater_house_smatv",
+          "site_jardine_house_smatv",
+          "site_exchange_square_smatv",
+          "site_the_forum_smatv",
+          "site_the_upper_house_cabd",
+          "site_luk_yeung_galleria_cctv",
+          "site_paradise_mall_cctv",
+          "site_centre_for_health_protection_for_ha",
+          "site_montara",
+          "site_stmc_elv",
+          "site_lee_garden_two_30_f_31_f_gallagher",
+          "site_metro_town",
+          "site_elements",
+          "site_iclub",
+          "site_iclub_2",
+          "site_iclub_3",
+          "site_iclub_4",
+          "site_iclub_5",
+          "site_lp10",
+          "site_two_taikoo_place",
+          "site_sheraton_hong_kong_tung_chung_hotel",
+          "site_k11_atelier_king_s_road",
+          "site_villa_lucca",
+          "site_hku_space_kec",
+          "site_hku_space_kwc",
+          "site_hku_space_unc",
+          "site_tbay",
+          "site_hemera",
+          "site_greenview_villa",
+          "site_malibu_5",
+          "site_la_marina",
+          "site_sol_city",
+          "site_the_wai_elv",
+          "site_lohas_park",
+          "site_luk_yeung_sun_chuen",
+          "site_8_clear_water_bay_road_8",
+          "site_five_pacific_place_turnstile",
+          "site_lp6",
+          "site_central_park_park_avenue",
+          "site_island_harbourview",
+          "site_harbour_green",
+          "site_the_upper_house_cctv",
+          "site_united_christian_hospital",
+          "site_choi_hung_carpark_ad_hoc",
+          "site_hunghom_carpark_ad_hoc",
+          "site_trackside_villas_ad_hoc",
+          "site_the_riverpark_8_ad_hoc",
+          "site_plaza_ascot_elv_ad_hoc",
+          "site_hanford_plaza_elv_ad_hoc",
+          "site_luk_yeung_galleria_elv",
+          "site_ocean_walk_elv",
+          "site_paradise_mall_elv",
+          "site_citylink_plaza_elv",
+          "site_montego_bay",
+          "site_the_southside",
+          "site_the_southside_parking_guiding_system_pgs_ad_hoc",
+          "site_elements_parking_guiding_system_pgs_ad_hoc",
+          "site_jardine_house_turnstile_vms",
+          "site_chater_house_turnstile_vms",
+          "site_alexandra_house_turnstile_vms",
+          "site_york_house_turnstile_vms",
+          "site_seaview_crescent",
+          "site_six_pacific_place_pv",
+          "site_six_pacific_place_elv",
+          "site_83_king_lam_street_83",
+          "site_aia_urban_campus",
+          "site_cheung_kong_center_2",
+          "site_atal_tower",
+          "site_the_henderson",
+          "site_ontolo",
+          "site_hysan_place_elv",
+          "site_hsbc_skm",
+          "site_three_pacific_place_sg_turnstile",
+          "site_the_palazzo",
+          "site_in_one",
+          "site_the_austin",
+          "site_the_harbourside",
+          "site_the_waterfront",
+          "site_sorrento",
+          "site_gopc"
+        ]
       }
     ]
   },
-
   "sites": [
     {
-      "id": "site_repulse_bay",
-      "name": "淺水灣",
-      "aliases": ["淺水灣", "浅水湾", "Repulse Bay"],
+      "id": "site_the_upper_house_pa",
+      "name": "The Upper House PA",
+      "aliases": [
+        "The Upper House PA"
+      ],
       "enabled": true
     },
     {
-      "id": "site_lpp",
-      "name": "LPP",
-      "aliases": ["LPP", "LPP Free Access", "L212D", "L322", "L323B"],
+      "id": "site_one_island_east",
+      "name": "One Island East",
+      "aliases": [
+        "One Island East"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_the_mall",
+      "name": "The Mall",
+      "aliases": [
+        "The Mall"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_lincoln_house",
+      "name": "林肯大廈",
+      "aliases": [
+        "Lincoln House 林肯大廈",
+        "林肯大廈",
+        "Lincoln House"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_oxford_house",
+      "name": "濠豐大廈",
+      "aliases": [
+        "Oxford House 濠豐大廈",
+        "濠豐大廈",
+        "Oxford House"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_festival_walk",
+      "name": "又一城",
+      "aliases": [
+        "Festival Walk 又一城",
+        "又一城",
+        "Festival Walk"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_lee_garden_five",
+      "name": "利園五期",
+      "aliases": [
+        "Lee Garden Five 利園五期",
+        "利園五期",
+        "Lee Garden Five"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_lee_garden_six",
+      "name": "利園六期",
+      "aliases": [
+        "Lee Garden Six 利園六期   LG6",
+        "利園六期",
+        "Lee Garden Six",
+        "LG6"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_8_qre_generali_tower",
+      "name": "8 QRE (Generali Tower)",
+      "aliases": [
+        "8 QRE (Generali Tower)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_five_pacific_place",
+      "name": "Five Pacific Place",
+      "aliases": [
+        "Five Pacific Place"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_ubs_ag_credit_suisse",
+      "name": "UBS AG (Credit Suisse *)",
+      "aliases": [
+        "UBS AG (Credit Suisse *)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_lee_garden_two",
+      "name": "利園二期",
+      "aliases": [
+        "Lee Garden Two 利園二期   LG2",
+        "利園二期",
+        "Lee Garden Two",
+        "LG2"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_the_grandiose",
+      "name": "君傲灣",
+      "aliases": [
+        "The Grandiose 君傲灣",
+        "君傲灣",
+        "The Grandiose"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_midtown_soundwill_plaza_ii",
+      "name": "Midtown - Soundwill Plaza II",
+      "aliases": [
+        "Midtown - Soundwill Plaza II"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_east_apartments",
+      "name": "東隅服務式公寓",
+      "aliases": [
+        "East Apartments 東隅服務式公寓",
+        "東隅服務式公寓",
+        "East Apartments"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_atal_yau_tong_alarm_cctv",
+      "name": "ATAL (Yau Tong) Alarm & CCTV",
+      "aliases": [
+        "ATAL (Yau Tong) Alarm & CCTV"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_aia_central_fin_light",
+      "name": "AIA Central (Fin-Light)",
+      "aliases": [
+        "AIA Central (Fin-Light)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_gateway",
+      "name": "Gateway",
+      "aliases": [
+        "Gateway"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_eagle_harbour_public_carpark",
+      "name": "鷹港公眾停車場",
+      "aliases": [
+        "Eagle Harbour Public Carpark 鷹港公眾停車場",
+        "鷹港公眾停車場",
+        "Eagle Harbour Public Carpark"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_the_wave",
+      "name": "The Wave",
+      "aliases": [
+        "The Wave"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_td_tower",
+      "name": "電訊數碼大樓",
+      "aliases": [
+        "TD Tower 電訊數碼大樓",
+        "電訊數碼大樓",
+        "TD Tower"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_the_forest_k28_skypark_led_tv_display_wall",
+      "name": "The Forest, K28 Skypark (LED TV Display Wall)",
+      "aliases": [
+        "The Forest, K28 Skypark (LED TV Display Wall)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_k11_atelier_h3_elv",
+      "name": "K11 Atelier H3 (ELV)",
+      "aliases": [
+        "K11 Atelier H3 (ELV)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_k11_atelier_h3_security_gate",
+      "name": "K11 Atelier H3 (Security Gate)",
+      "aliases": [
+        "K11 Atelier H3 (Security Gate)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_the_pavilia_bay",
+      "name": "柏傲灣",
+      "aliases": [
+        "The Pavilia Bay 柏傲灣",
+        "柏傲灣",
+        "The Pavilia Bay"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_one_two_exchange_square",
+      "name": "One & Two Exchange Square",
+      "aliases": [
+        "One & Two Exchange Square"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_lee_garden_three",
+      "name": "利園三期",
+      "aliases": [
+        "Lee Garden Three 利園三期 LG3",
+        "利園三期",
+        "Lee Garden Three",
+        "LG3"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_cullinan_west",
+      "name": "匯璽",
+      "aliases": [
+        "Cullinan West 匯璽",
+        "匯璽",
+        "Cullinan West"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_one_taikoo_place",
+      "name": "One Taikoo Place",
+      "aliases": [
+        "One Taikoo Place"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_hong_kong_children_s_hospital_broadcast_reception",
+      "name": "Hong Kong Children's Hospital (Broadcast Reception)",
+      "aliases": [
+        "Hong Kong Children's Hospital (Broadcast Reception)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_hsbc_mty",
+      "name": "HSBC MTY",
+      "aliases": [
+        "HSBC MTY"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_lee_garden_three_fa_ade_podium_lighting",
+      "name": "Lee Garden Three (Façade & Podium Lighting)",
+      "aliases": [
+        "Lee Garden Three (Façade & Podium Lighting)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_parc_city",
+      "name": "全城匯",
+      "aliases": [
+        "Parc City 全城匯",
+        "全城匯",
+        "Parc City"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_the_capitol",
+      "name": "首都",
+      "aliases": [
+        "The Capitol 首都",
+        "首都",
+        "The Capitol"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_festival_walk_pa_cctv_smatv_cabd",
+      "name": "Festival Walk (PA, CCTV, SMATV/CABD)",
+      "aliases": [
+        "Festival Walk (PA, CCTV, SMATV/CABD)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_k11_musea_elv",
+      "name": "K11 Musea (ELV)",
+      "aliases": [
+        "K11 Musea (ELV)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_k11_musea_security_gate",
+      "name": "K11 Musea (Security Gate)",
+      "aliases": [
+        "K11 Musea (Security Gate)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_rosewood_hotel_k11_artus",
+      "name": "瑰麗酒店",
+      "aliases": [
+        "Rosewood Hotel 瑰麗酒店 & K11 Artus",
+        "瑰麗酒店",
+        "Rosewood Hotel & K11 Artus"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_hku_space_po_leung_kuk_stanley_ho_community_college",
+      "name": "HKU Space Po Leung Kuk Stanley Ho Community College",
+      "aliases": [
+        "HKU Space Po Leung Kuk Stanley Ho Community College"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_landmark_east",
+      "name": "Landmark East",
+      "aliases": [
+        "Landmark East"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_le_prestige",
+      "name": "領都",
+      "aliases": [
+        "Le Prestige 領都",
+        "領都",
+        "Le Prestige"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_asm",
+      "name": "ASM",
+      "aliases": [
+        "ASM"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_hkbh",
+      "name": "浸會醫院",
+      "aliases": [
+        "HKBH 浸會醫院",
+        "浸會醫院",
+        "HKBH"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_citylink_plaza_cctv",
+      "name": "連城廣場",
+      "aliases": [
+        "Citylink Plaza (CCTV) 連城廣場",
+        "連城廣場",
+        "Citylink Plaza (CCTV)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_city_point",
+      "name": "環宇海灣",
+      "aliases": [
+        "City Point 環宇海灣",
+        "環宇海灣",
+        "City Point"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_citywalk_led_wall",
+      "name": "Citywalk (LED Wall)",
+      "aliases": [
+        "Citywalk (LED Wall)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_the_entrance",
+      "name": "峻源",
+      "aliases": [
+        "The Entrance 峻源",
+        "峻源",
+        "The Entrance"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_avenue_of_stars_salisbury_garden",
+      "name": "星光大道",
+      "aliases": [
+        "Avenue of Stars 星光大道 & Salisbury Garden",
+        "星光大道",
+        "Avenue of Stars & Salisbury Garden"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_festival_city",
+      "name": "名城",
+      "aliases": [
+        "Festival City 名城",
+        "名城",
+        "Festival City"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_cdw_building_people_counting",
+      "name": "中染大廈",
+      "aliases": [
+        "CDW Building (中染大廈) People Counting",
+        "中染大廈",
+        "CDW Building ( ) People Counting"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_the_hari_330_lockhart_road",
+      "name": "The Hari (330 Lockhart Road)",
+      "aliases": [
+        "The Hari (330 Lockhart Road)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_pacific_place_acs_at_lg1",
+      "name": "Pacific Place (ACS at LG1)",
+      "aliases": [
+        "Pacific Place (ACS at LG1)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_pacific_place_cctv",
+      "name": "Pacific Place (CCTV)",
+      "aliases": [
+        "Pacific Place (CCTV)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_telford_plaza_i_ii",
+      "name": "Telford Plaza I & II",
+      "aliases": [
+        "Telford Plaza I & II"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_hang_seng_tower",
+      "name": "Hang Seng Tower",
+      "aliases": [
+        "Hang Seng Tower"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_mtr_headquarters_building",
+      "name": "MTR Headquarters Building",
+      "aliases": [
+        "MTR Headquarters Building"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_maritime_square_i_ii",
+      "name": "青衣城",
+      "aliases": [
+        "Maritime Square I & II 青衣城",
+        "青衣城",
+        "Maritime Square I & II"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_popcorn_1_2",
+      "name": "PopCorn 1 & 2",
+      "aliases": [
+        "PopCorn 1 & 2"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_the_lane",
+      "name": "The Lane",
+      "aliases": [
+        "The Lane"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_the_lohas",
+      "name": "The LOHAS",
+      "aliases": [
+        "The LOHAS"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_york_house_access_gates",
+      "name": "York House (Access Gates)",
+      "aliases": [
+        "York House (Access Gates)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_jardine_house_access_gates",
+      "name": "Jardine House (Access Gates)",
+      "aliases": [
+        "Jardine House (Access Gates)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_lee_garden_one_cctv",
+      "name": "Lee Garden One (CCTV)",
+      "aliases": [
+        "Lee Garden One (CCTV)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_one_hysan_avenue_cctv",
+      "name": "One Hysan Avenue (CCTV)",
+      "aliases": [
+        "One Hysan Avenue (CCTV)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_hysan_place_cctv",
+      "name": "Hysan Place (CCTV)",
+      "aliases": [
+        "Hysan Place (CCTV)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_hkis_cctv",
+      "name": "大潭",
+      "aliases": [
+        "HKIS 大潭 CCTV",
+        "大潭",
+        "HKIS CCTV"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_hkis_cctv_2",
+      "name": "淺水灣",
+      "aliases": [
+        "HKIS 淺水灣 CCTV",
+        "淺水灣",
+        "HKIS CCTV"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_hkis_acs_cctv",
+      "name": "大潭",
+      "aliases": [
+        "HKIS 大潭 ACS & CCTV",
+        "大潭",
+        "HKIS ACS & CCTV"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_hkis_acs_cctv_2",
+      "name": "淺水灣",
+      "aliases": [
+        "HKIS 淺水灣 ACS & CCTV",
+        "淺水灣",
+        "HKIS ACS & CCTV"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_plaza_ascot_cctv",
+      "name": "駿景廣場",
+      "aliases": [
+        "Plaza Ascot 駿景廣場 (CCTV)",
+        "駿景廣場",
+        "Plaza Ascot (CCTV)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_ocean_walk_cctv",
+      "name": "海趣坊",
+      "aliases": [
+        "Ocean Walk 海趣坊 (CCTV)",
+        "海趣坊",
+        "Ocean Walk (CCTV)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_hanford_plaza_cctv",
+      "name": "恒福商場",
+      "aliases": [
+        "Hanford Plaza 恒福商場 (CCTV)",
+        "恒福商場",
+        "Hanford Plaza (CCTV)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_stmc_cctv",
+      "name": "新屯門中心",
+      "aliases": [
+        "STMC 新屯門中心 (CCTV)",
+        "新屯門中心",
+        "STMC (CCTV)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_gloucester_tower_smatv",
+      "name": "告羅士打大廈",
+      "aliases": [
+        "Gloucester Tower 告羅士打大廈 (SMATV*)",
+        "告羅士打大廈",
+        "Gloucester Tower (SMATV*)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_edinburgh_tower_smatv",
+      "name": "公爵大廈",
+      "aliases": [
+        "Edinburgh Tower 公爵大廈 (SMATV*)",
+        "公爵大廈",
+        "Edinburgh Tower (SMATV*)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_york_house_smatv",
+      "name": "約克大廈",
+      "aliases": [
+        "York House 約克大廈 (SMATV)",
+        "約克大廈",
+        "York House (SMATV)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_alexandra_house_smatv",
+      "name": "歷山大廈",
+      "aliases": [
+        "Alexandra House 歷山大廈 (SMATV*)",
+        "歷山大廈",
+        "Alexandra House (SMATV*)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_prince_s_building_smatv",
+      "name": "太子大廈",
+      "aliases": [
+        "Prince's Building 太子大廈 (SMATV*)",
+        "太子大廈",
+        "Prince's Building (SMATV*)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_chater_house_smatv",
+      "name": "遮打大廈",
+      "aliases": [
+        "Chater House 遮打大廈 (SMATV*)",
+        "遮打大廈",
+        "Chater House (SMATV*)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_jardine_house_smatv",
+      "name": "怡和大廈",
+      "aliases": [
+        "Jardine House 怡和大廈 (SMATV*)",
+        "怡和大廈",
+        "Jardine House (SMATV*)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_exchange_square_smatv",
+      "name": "交易廣場",
+      "aliases": [
+        "Exchange Square 交易廣場 (SMATV*)",
+        "交易廣場",
+        "Exchange Square (SMATV*)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_the_forum_smatv",
+      "name": "富臨閣",
+      "aliases": [
+        "The Forum 富臨閣 (SMATV*)",
+        "富臨閣",
+        "The Forum (SMATV*)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_the_upper_house_cabd",
+      "name": "The Upper House (CABD)",
+      "aliases": [
+        "The Upper House (CABD)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_luk_yeung_galleria_cctv",
+      "name": "綠楊坊",
+      "aliases": [
+        "Luk Yeung Galleria 綠楊坊 (CCTV)",
+        "綠楊坊",
+        "Luk Yeung Galleria (CCTV)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_paradise_mall_cctv",
+      "name": "杏花新城",
+      "aliases": [
+        "Paradise Mall 杏花新城 (CCTV)",
+        "杏花新城",
+        "Paradise Mall (CCTV)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_centre_for_health_protection_for_ha",
+      "name": "Centre for Health Protection for HA",
+      "aliases": [
+        "Centre for Health Protection for HA"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_montara",
+      "name": "Montara",
+      "aliases": [
+        "Montara"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_stmc_elv",
+      "name": "新屯門中心",
+      "aliases": [
+        "STMC 新屯門中心 (ELV)",
+        "新屯門中心",
+        "STMC (ELV)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_lee_garden_two_30_f_31_f_gallagher",
+      "name": "Lee Garden Two (30/F 31/F Gallagher)",
+      "aliases": [
+        "Lee Garden Two (30/F 31/F Gallagher)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_metro_town",
+      "name": "都會駅",
+      "aliases": [
+        "Metro Town (都會駅)",
+        "都會駅",
+        "Metro Town ( )"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_elements",
+      "name": "圓方",
+      "aliases": [
+        "Elements 圓方",
+        "圓方",
+        "Elements"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_iclub",
+      "name": "富薈上環酒店",
+      "aliases": [
+        "iclub 富薈上環酒店",
+        "富薈上環酒店",
+        "iclub"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_iclub_2",
+      "name": "富薈尚乘上環酒店",
+      "aliases": [
+        "iclub 富薈尚乘上環酒店",
+        "富薈尚乘上環酒店",
+        "iclub"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_iclub_3",
+      "name": "富薈炮台山酒店",
+      "aliases": [
+        "iclub 富薈炮台山酒店",
+        "富薈炮台山酒店",
+        "iclub"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_iclub_4",
+      "name": "富薈土瓜灣酒店",
+      "aliases": [
+        "iclub 富薈土瓜灣酒店",
+        "富薈土瓜灣酒店",
+        "iclub"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_iclub_5",
+      "name": "富薈旺角酒店",
+      "aliases": [
+        "iclub 富薈旺角酒店",
+        "富薈旺角酒店",
+        "iclub"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_lp10",
+      "name": "LP10",
+      "aliases": [
+        "LP10"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_two_taikoo_place",
+      "name": "Two Taikoo Place",
+      "aliases": [
+        "Two Taikoo Place"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_sheraton_hong_kong_tung_chung_hotel",
+      "name": "東涌喜來登酒店",
+      "aliases": [
+        "Sheraton Hong Kong Tung Chung Hotel 東涌喜來登酒店",
+        "東涌喜來登酒店",
+        "Sheraton Hong Kong Tung Chung Hotel"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_k11_atelier_king_s_road",
+      "name": "英皇道",
+      "aliases": [
+        "K11 Atelier King's Road 英皇道",
+        "英皇道",
+        "K11 Atelier King's Road"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_villa_lucca",
+      "name": "林海山城",
+      "aliases": [
+        "Villa Lucca 林海山城",
+        "林海山城",
+        "Villa Lucca"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_hku_space_kec",
+      "name": "HKU Space KEC",
+      "aliases": [
+        "HKU Space KEC"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_hku_space_kwc",
+      "name": "HKU Space KWC",
+      "aliases": [
+        "HKU Space KWC"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_hku_space_unc",
+      "name": "HKU Space UNC",
+      "aliases": [
+        "HKU Space UNC"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_tbay",
+      "name": "Tbay",
+      "aliases": [
+        "Tbay"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_hemera",
+      "name": "緻藍天",
+      "aliases": [
+        "Hemera 緻藍天",
+        "緻藍天",
+        "Hemera"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_greenview_villa",
+      "name": "綠悠雅苑",
+      "aliases": [
+        "Greenview Villa 綠悠雅苑",
+        "綠悠雅苑",
+        "Greenview Villa"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_malibu_5",
+      "name": "日出康城 期",
+      "aliases": [
+        "MALIBU 日出康城5期",
+        "日出康城 期",
+        "MALIBU 5"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_la_marina",
+      "name": "揚海",
+      "aliases": [
+        "La Marina 揚海",
+        "揚海",
+        "La Marina"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_sol_city",
+      "name": "朗城滙",
+      "aliases": [
+        "Sol City 朗城滙",
+        "朗城滙",
+        "Sol City"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_the_wai_elv",
+      "name": "圍方",
+      "aliases": [
+        "The Wai 圍方 (ELV)",
+        "圍方",
+        "The Wai (ELV)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_lohas_park",
+      "name": "日出公園",
+      "aliases": [
+        "Lohas Park 日出公園",
+        "日出公園",
+        "Lohas Park"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_luk_yeung_sun_chuen",
+      "name": "綠楊新邨",
+      "aliases": [
+        "Luk Yeung Sun Chuen 綠楊新邨",
+        "綠楊新邨",
+        "Luk Yeung Sun Chuen"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_8_clear_water_bay_road_8",
+      "name": "清水灣道 號",
+      "aliases": [
+        "8 Clear Water Bay Road 清水灣道8號",
+        "清水灣道 號",
+        "8 Clear Water Bay Road 8"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_five_pacific_place_turnstile",
+      "name": "Five Pacific Place Turnstile 5PP",
+      "aliases": [
+        "Five Pacific Place Turnstile 5PP",
+        "Five Pacific Place Turnstile",
+        "5PP"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_lp6",
+      "name": "LP6",
+      "aliases": [
+        "LP6"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_central_park_park_avenue",
+      "name": "帝柏海灣 柏景灣",
+      "aliases": [
+        "Central Park & Park Avenue 帝柏海灣 & 柏景灣",
+        "帝柏海灣 柏景灣",
+        "Central Park & Park Avenue"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_island_harbourview",
+      "name": "維港灣",
+      "aliases": [
+        "Island Harbourview 維港灣",
+        "維港灣",
+        "Island Harbourview"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_harbour_green",
+      "name": "君匯港",
+      "aliases": [
+        "Harbour Green 君匯港",
+        "君匯港",
+        "Harbour Green"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_the_upper_house_cctv",
+      "name": "The Upper House CCTV",
+      "aliases": [
+        "The Upper House CCTV"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_united_christian_hospital",
+      "name": "聯合醫院",
+      "aliases": [
+        "United Christian Hospital 聯合醫院",
+        "聯合醫院",
+        "United Christian Hospital"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_choi_hung_carpark_ad_hoc",
+      "name": "彩虹車場",
+      "aliases": [
+        "Choi Hung Carpark 彩虹車場 (Ad-hoc)",
+        "彩虹車場",
+        "Choi Hung Carpark (Ad-hoc)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_hunghom_carpark_ad_hoc",
+      "name": "紅磡車場",
+      "aliases": [
+        "HungHom Carpark 紅磡車場 (Ad-hoc)",
+        "紅磡車場",
+        "HungHom Carpark (Ad-hoc)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_trackside_villas_ad_hoc",
+      "name": "策誠軒",
+      "aliases": [
+        "Trackside Villas 策誠軒 (Ad-hoc)",
+        "策誠軒",
+        "Trackside Villas (Ad-hoc)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_the_riverpark_8_ad_hoc",
+      "name": "溱岸 號",
+      "aliases": [
+        "The Riverpark 溱岸8號 (Ad-hoc)",
+        "溱岸 號",
+        "The Riverpark 8 (Ad-hoc)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_plaza_ascot_elv_ad_hoc",
+      "name": "駿景廣場",
+      "aliases": [
+        "Plaza Ascot 駿景廣場 (ELV) (Ad-hoc)",
+        "駿景廣場",
+        "Plaza Ascot (ELV) (Ad-hoc)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_hanford_plaza_elv_ad_hoc",
+      "name": "恒福商場",
+      "aliases": [
+        "Hanford Plaza 恒福商場 (ELV) (ad-hoc)",
+        "恒福商場",
+        "Hanford Plaza (ELV) (ad-hoc)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_luk_yeung_galleria_elv",
+      "name": "綠楊坊",
+      "aliases": [
+        "Luk Yeung Galleria 綠楊坊 ELV",
+        "綠楊坊",
+        "Luk Yeung Galleria ELV"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_ocean_walk_elv",
+      "name": "海趣坊",
+      "aliases": [
+        "Ocean Walk 海趣坊 ELV",
+        "海趣坊",
+        "Ocean Walk ELV"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_paradise_mall_elv",
+      "name": "杏花新城",
+      "aliases": [
+        "Paradise Mall 杏花新城 ELV",
+        "杏花新城",
+        "Paradise Mall ELV"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_citylink_plaza_elv",
+      "name": "連城廣場",
+      "aliases": [
+        "Citylink Plaza 連城廣場 ELV",
+        "連城廣場",
+        "Citylink Plaza ELV"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_montego_bay",
+      "name": "蔚藍東岸",
+      "aliases": [
+        "Montego Bay 蔚藍東岸",
+        "蔚藍東岸",
+        "Montego Bay"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_the_southside",
+      "name": "The Southside",
+      "aliases": [
+        "The Southside"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_the_southside_parking_guiding_system_pgs_ad_hoc",
+      "name": "The Southside Parking Guiding System PGS Ad-hoc",
+      "aliases": [
+        "The Southside Parking Guiding System PGS Ad-hoc"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_elements_parking_guiding_system_pgs_ad_hoc",
+      "name": "圓方",
+      "aliases": [
+        "Elements Parking Guiding System PGS (圓方) Ad-hoc",
+        "圓方",
+        "Elements Parking Guiding System PGS ( ) Ad-hoc"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_jardine_house_turnstile_vms",
+      "name": "怡和大廈",
+      "aliases": [
+        "Jardine House 怡和大廈 (Turnstile VMS)",
+        "怡和大廈",
+        "Jardine House (Turnstile VMS)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_chater_house_turnstile_vms",
+      "name": "遮打大廈",
+      "aliases": [
+        "Chater House 遮打大廈 (Turnstile VMS)",
+        "遮打大廈",
+        "Chater House (Turnstile VMS)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_alexandra_house_turnstile_vms",
+      "name": "歷山大廈",
+      "aliases": [
+        "Alexandra House 歷山大廈 (Turnstile VMS)",
+        "歷山大廈",
+        "Alexandra House (Turnstile VMS)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_york_house_turnstile_vms",
+      "name": "約克大廈",
+      "aliases": [
+        "York House 約克大廈 (Turnstile VMS)",
+        "約克大廈",
+        "York House (Turnstile VMS)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_seaview_crescent",
+      "name": "海堤灣畔",
+      "aliases": [
+        "Seaview Crescent 海堤灣畔",
+        "海堤灣畔",
+        "Seaview Crescent"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_six_pacific_place_pv",
+      "name": "Six Pacific Place PV",
+      "aliases": [
+        "Six Pacific Place PV"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_six_pacific_place_elv",
+      "name": "Six Pacific Place ELV",
+      "aliases": [
+        "Six Pacific Place ELV"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_83_king_lam_street_83",
+      "name": "瓊林街 號",
+      "aliases": [
+        "83 King Lam Street 瓊林街83號",
+        "瓊林街 號",
+        "83 King Lam Street 83"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_aia_urban_campus",
+      "name": "AIA Urban Campus",
+      "aliases": [
+        "AIA Urban Campus"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_cheung_kong_center_2",
+      "name": "Cheung Kong Center 2",
+      "aliases": [
+        "Cheung Kong Center 2"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_atal_tower",
+      "name": "ATAL Tower",
+      "aliases": [
+        "ATAL Tower"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_the_henderson",
+      "name": "The Henderson",
+      "aliases": [
+        "The Henderson"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_ontolo",
+      "name": "朗濤",
+      "aliases": [
+        "Ontolo 朗濤",
+        "朗濤",
+        "Ontolo"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_hysan_place_elv",
+      "name": "Hysan Place ELV",
+      "aliases": [
+        "Hysan Place ELV"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_hsbc_skm",
+      "name": "石門",
+      "aliases": [
+        "HSBC SKM 石門",
+        "石門",
+        "HSBC SKM"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_three_pacific_place_sg_turnstile",
+      "name": "Three Pacific Place SG (Turnstile)",
+      "aliases": [
+        "Three Pacific Place SG (Turnstile)"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_the_palazzo",
+      "name": "御龍山",
+      "aliases": [
+        "The Palazzo 御龍山",
+        "御龍山",
+        "The Palazzo"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_in_one",
+      "name": "瑜一",
+      "aliases": [
+        "In One 瑜一",
+        "瑜一",
+        "In One"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_the_austin",
+      "name": "The Austin",
+      "aliases": [
+        "The Austin"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_the_harbourside",
+      "name": "君臨天下",
+      "aliases": [
+        "The Harbourside 君臨天下",
+        "君臨天下",
+        "The Harbourside"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_the_waterfront",
+      "name": "漾日居",
+      "aliases": [
+        "The Waterfront 漾日居",
+        "漾日居",
+        "The Waterfront"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_sorrento",
+      "name": "擎天半島",
+      "aliases": [
+        "Sorrento 擎天半島",
+        "擎天半島",
+        "Sorrento"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "site_gopc",
+      "name": "GOPC",
+      "aliases": [
+        "GOPC"
+      ],
       "enabled": true
     }
   ],
-
   "event_rules": {
     "completed_keywords": [
       "已完成",
@@ -91,7 +1866,6 @@
       "入水"
     ]
   },
-
   "photo_record_rules": {
     "enabled": true,
     "require_photo_for_quotation": true,
