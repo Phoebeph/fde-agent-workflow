@@ -56,7 +56,9 @@ class DeepSeekClient:
                         "If one WhatsApp message contains multiple independent maintenance jobs, "
                         "return one item per job in the items array. Ignore standalone photo labels "
                         "or material labels such as 前/中/后/料 unless they include real work details. "
-                        "Use only a site from message.allowed_site_names. Split different sites into separate items."
+                        "Use only a site from message.allowed_site_names. Split different sites into separate items. "
+                        "A date belongs only to the immediately following site section. Never inherit a date from "
+                        "an earlier site. If the current site section has no date, use message.archive_date."
                     ),
                 },
                 {
@@ -297,6 +299,7 @@ def split_work_item_text(text: str) -> list[str]:
             continue
         if _looks_like_site_heading(line) and not _looks_like_work_line(line):
             current_heading = f"{current_date} {line}".strip()
+            current_date = ""
             continue
         if _looks_like_work_line(line):
             heading = current_heading or current_date

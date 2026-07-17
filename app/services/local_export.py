@@ -7,7 +7,7 @@ from typing import Any
 from xml.sax.saxutils import escape
 from zipfile import ZIP_DEFLATED, ZipFile
 
-from app.services.archive import safe_part
+from app.services.archive import by_site_date_dir, by_site_year_dir, safe_part
 from app.services.site_policy import BUSINESS_CATEGORIES, QUOTATION_CATEGORY, REPAIR_CATEGORY
 
 
@@ -120,7 +120,7 @@ def export_site_annual_workbook(*, db: Any, year: str, site: str, output_root: P
     repair_records = [record for record in records if record.get("business_category") == REPAIR_CATEGORY]
     quotation_records = [record for record in records if record.get("business_category") == QUOTATION_CATEGORY]
     valid_ids = {int(record["id"]) for record in records if record.get("business_category") in BUSINESS_CATEGORIES}
-    annual_dir = output_root / safe_part(site, "site") / safe_part(year, "year")
+    annual_dir = by_site_year_dir(output_root, site=site, year=year)
     annual_dir.mkdir(parents=True, exist_ok=True)
     path = annual_dir / f"{safe_part(site, 'site')}_{safe_part(year, 'year')}_总表.xlsx"
     sheets = [
@@ -134,14 +134,7 @@ def export_site_annual_workbook(*, db: Any, year: str, site: str, output_root: P
 
 
 def site_category_dir(root: Path, site: str, work_date: str, category: str) -> Path:
-    return (
-        root
-        / safe_part(site, "site")
-        / safe_part(work_date[:4], "year")
-        / safe_part(work_date[5:7], "month")
-        / safe_part(work_date[8:10], "day")
-        / safe_part(category, "category")
-    )
+    return by_site_date_dir(root, site=site, work_date=work_date) / safe_part(category, "category")
 
 
 def _category_attachment_checks(
@@ -172,10 +165,7 @@ def dated_export_dir(root: Path, work_date: str) -> Path:
 
 
 def by_site_export_dir(root: Path, work_date: str, site: str) -> Path:
-    year = work_date[:4] if len(work_date) >= 4 and work_date[:4].isdigit() else "unknown_year"
-    month = work_date[5:7] if len(work_date) >= 7 and work_date[5:7].isdigit() else "unknown_month"
-    day = work_date[8:10] if len(work_date) >= 10 and work_date[8:10].isdigit() else "unknown_day"
-    return root / "by_site" / safe_part(site, "unknown_site") / year / month / day
+    return by_site_date_dir(root, site=site, work_date=work_date)
 
 
 def _write_export_workbook(

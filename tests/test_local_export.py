@@ -12,7 +12,7 @@ class FakeExportDatabase:
             {
                 "id": 1,
                 "export_date": work_date,
-                "work_date": work_date,
+                "work_date": "2026-06-15",
                 "staff_name": "Brian",
                 "site": "The SOUI",
                 "work_type": "maintenance",
@@ -149,6 +149,10 @@ class LocalExportTests(unittest.TestCase):
             self.assertIn("归档日期", sheet_xml)
             self.assertIn("实际工作日期", sheet_xml)
             self.assertIn("备注", sheet_xml)
+            self.assertIn(
+                "2026-06-19 记录的其他日期工作：实际工作日期 2026-06-15",
+                sheet_xml,
+            )
 
     def test_site_classified_exports_keep_site_first_daily_and_annual_files(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -158,12 +162,13 @@ class LocalExportTests(unittest.TestCase):
                 output_root=Path(temp_dir),
             )
 
-            repair_path = Path(temp_dir) / "The_SOUI" / "2026" / "06" / "19" / "维修" / "The_SOUI_2026-06-19_维修.xlsx"
-            quotation_path = Path(temp_dir) / "The_SOUI" / "2026" / "06" / "19" / "报价" / "The_SOUI_2026-06-19_报价.xlsx"
-            annual_path = Path(temp_dir) / "The_SOUI" / "2026" / "The_SOUI_2026_总表.xlsx"
+            repair_path = Path(temp_dir) / "by_site" / "The_SOUI" / "2026" / "06" / "19" / "维修" / "The_SOUI_2026-06-19_维修.xlsx"
+            quotation_path = Path(temp_dir) / "by_site" / "The_SOUI" / "2026" / "06" / "19" / "报价" / "The_SOUI_2026-06-19_报价.xlsx"
+            annual_path = Path(temp_dir) / "by_site" / "The_SOUI" / "2026" / "The_SOUI_2026_总表.xlsx"
             self.assertTrue(repair_path.exists())
             self.assertTrue(quotation_path.exists())
             self.assertTrue(annual_path.exists())
+            self.assertFalse((Path(temp_dir) / "The_SOUI").exists())
             self.assertIn(str(repair_path), result.daily_paths)
             with ZipFile(annual_path) as workbook:
                 workbook_xml = workbook.read("xl/workbook.xml").decode("utf-8")
