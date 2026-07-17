@@ -1,5 +1,12 @@
 {
   "timezone": "Asia/Shanghai",
+  "daily_schedule_pdf": {
+    "enabled": true,
+    "filename_keywords": [
+      "work schedule",
+      "work schedual"
+    ]
+  },
   "whatsapp": {
     "use_current_logged_in_account": true,
     "global_scan_lock_enabled": true,

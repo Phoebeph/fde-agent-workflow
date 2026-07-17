@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from zipfile import ZipFile
 
+from app.database import Database
 from app.services.local_export import export_daily_workbook, export_site_classified_workbooks
 
 
@@ -112,6 +113,53 @@ class FakeExportDatabase:
 
 
 class LocalExportTests(unittest.TestCase):
+    def test_alias_record_exports_under_configured_site_name(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            db = Database(root / "test.db")
+            db.init()
+            db.sync_site_configs(
+                [{"name": "规范地点", "aliases": ["Alias Site"], "is_active": True}]
+            )
+            db.insert_messages(
+                [
+                    {
+                        "group_name": "维修群",
+                        "sender": "Kei",
+                        "sent_at": "2026-07-17T10:00:00+08:00",
+                        "text": "Alias Site 维修完成",
+                        "message_fingerprint": "export-canonical-" + "b" * 47,
+                        "has_attachments": False,
+                        "attachment_hints": [],
+                        "raw_payload": {},
+                    }
+                ]
+            )
+            message = db.get_message_by_fingerprint("export-canonical-" + "b" * 47)
+            db.save_repair_record(
+                message["id"],
+                {
+                    "work_date": "2026-07-17",
+                    "staff_name": "Kei",
+                    "site": "Alias Site",
+                    "business_category": "维修",
+                    "summary": "维修完成",
+                    "completion_status": "已完成",
+                },
+            )
+
+            daily = export_daily_workbook(db=db, work_date="2026-07-17", export_root=root / "data")
+            classified = export_site_classified_workbooks(
+                db=db,
+                work_date="2026-07-17",
+                output_root=root / "data",
+            )
+
+            self.assertTrue(any("规范地点" in path for path in daily.site_paths))
+            self.assertTrue(any("by_site/规范地点/" in path for path in classified.daily_paths))
+            self.assertFalse((root / "data" / "2026" / "07" / "17" / "Alias_Site").exists())
+            self.assertFalse((root / "data" / "by_site" / "Alias_Site").exists())
+
     def test_export_daily_workbook_writes_total_and_site_files(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             result = export_daily_workbook(

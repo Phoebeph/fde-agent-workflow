@@ -121,6 +121,70 @@ class DeepSeekClient:
             raise DeepSeekError("DeepSeek returned an invalid analysis payload") from exc
         return normalize_analysis_items(result, message, attachments, rules)
 
+    def parse_daily_schedule(
+        self,
+        *,
+        work_date: str,
+        source_file: str,
+        extracted_text: str,
+        allowed_site_names: list[str],
+    ) -> list[dict[str, Any]]:
+        if not self.enabled:
+            raise DeepSeekError("DeepSeek is disabled")
+        payload = {
+            "model": self.model,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "Convert a Hong Kong daily work schedule table into strict JSON. "
+                        "Return only one JSON object with a rows array. Each row is one employee, "
+                        "shift, configured site and current-day task. Expand ditto/same-as-above cells. "
+                        "Split multiple sites or independent tasks. Ignore historical dated notes inside "
+                        "task cells. Mark leave/rest/AL/OFF rows with is_leave=true. Never invent people, "
+                        "sites or tasks. Use only sites from allowed_site_names."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": json.dumps(
+                        {
+                            "work_date": work_date,
+                            "source_file": source_file,
+                            "allowed_site_names": allowed_site_names,
+                            "schedule_text": extracted_text,
+                            "required_json_schema": {
+                                "rows": [
+                                    {
+                                        "staff_name": "employee name exactly as shown",
+                                        "shift": "A.M.|P.M.|ALL_DAY",
+                                        "site": "one allowed canonical site",
+                                        "task_text": "concise current-day assignment, max 500 chars",
+                                        "confidence": "0 to 1",
+                                        "is_leave": False,
+                                    }
+                                ]
+                            },
+                        },
+                        ensure_ascii=False,
+                    ),
+                },
+            ],
+            "temperature": 0.0,
+            "stream": False,
+            "response_format": {"type": "json_object"},
+        }
+        data = self._post_json("/chat/completions", payload)
+        try:
+            content = data["choices"][0]["message"]["content"]
+            result = json.loads(content)
+            rows = result["rows"]
+        except (KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
+            raise DeepSeekError("DeepSeek returned an invalid schedule payload") from exc
+        if not isinstance(rows, list):
+            raise DeepSeekError("DeepSeek schedule rows must be a list")
+        return [row for row in rows if isinstance(row, dict)]
+
     def _post_json(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
         url = f"{self.base_url}{path}"
         request = urllib.request.Request(

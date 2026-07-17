@@ -69,6 +69,10 @@ class CustomerConfigTests(unittest.TestCase):
                             "require_pdf_report_for_atal_material": True,
                             "required_photo_types": ["wide_shot", "close_up"],
                         },
+                        "daily_schedule_pdf": {
+                            "enabled": True,
+                            "filename_keywords": ["work schedule", "work schedual"],
+                        },
                     },
                     ensure_ascii=False,
                 ),
@@ -88,6 +92,8 @@ class CustomerConfigTests(unittest.TestCase):
             self.assertEqual(settings.related_site_names(settings.whatsapp.groups[0]), ["淺水灣"])
             self.assertEqual(settings.event_rules.completed_keywords, ["done"])
             self.assertEqual(settings.photo_record_rules.required_photo_types, ["wide_shot", "close_up"])
+            self.assertTrue(settings.daily_schedule_pdf.enabled)
+            self.assertEqual(settings.daily_schedule_pdf.filename_keywords, ["work schedule", "work schedual"])
 
     def test_invalid_time_produces_error(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

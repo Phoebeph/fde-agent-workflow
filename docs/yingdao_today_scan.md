@@ -19,6 +19,10 @@
 
 第一版建议每 5 分钟运行一次，每次扫描当天全部消息。重复提交没有关系，后端会按消息指纹去重。
 
+当天最后一个配置提醒时段还有一条前置步骤：扫描
+`DATA_ROOT/YYYY/MM/DD/` 中最新的 Work Schedule PDF。没有文件、PDF 无文字层或 AI
+暂时不可用时只记录同步状态，不阻断既有 WhatsApp 跟进和提醒。
+
 ## 流程一：whatsapp_collect_today_messages
 
 影刀流程名建议：`whatsapp_collect_today_messages`。
@@ -221,6 +225,15 @@ SQLite 只保存文件名、路径、hash、类型和关联消息 ID，不保存
 ```http
 POST http://127.0.0.1:8000/api/followups/run?work_date=2026-06-13&limit=100
 ```
+
+自动化入口会按 job 的 `actions` 判断是否为最后提醒时段。最后一轮按以下顺序执行：
+
+1. `POST /api/schedules/sync-daily-pdf?work_date=YYYY-MM-DD`
+2. 同步成功或 hash 未变化时调用 `/api/followups/run?...&include_daily_pdf=true`
+3. 无文件或同步失败时调用 `/api/followups/run?...&include_daily_pdf=false`
+4. 拉取 pending reminders 并发送
+
+其他提醒时段直接使用 `include_daily_pdf=false`。这样当天 PDF 任务不会被提前催促。
 
 获取待发送提醒：
 

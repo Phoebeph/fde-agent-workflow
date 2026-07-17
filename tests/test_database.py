@@ -738,6 +738,81 @@ class DatabaseTests(unittest.TestCase):
             self.assertTrue(db.set_site_active(site_id, False))
             self.assertIsNone(db.match_site_in_text("L322 Project Room red light"))
 
+    def test_business_records_store_configured_site_name_when_given_alias(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db = Database(Path(temp_dir) / "test.db")
+            db.init()
+            db.sync_site_configs(
+                [{"name": "规范地点", "aliases": ["Alias Site"], "is_active": True}]
+            )
+            db.insert_messages(
+                [
+                    {
+                        "group_name": "维修群",
+                        "sender": "Kei",
+                        "sent_at": "2026-07-17T10:00:00+08:00",
+                        "text": "Alias Site 维修完成",
+                        "message_fingerprint": "canonical-site-" + "a" * 49,
+                        "has_attachments": False,
+                        "attachment_hints": [],
+                        "raw_payload": {},
+                    }
+                ]
+            )
+            message = db.get_message_by_fingerprint("canonical-site-" + "a" * 49)
+            db.save_repair_record(
+                message["id"],
+                {
+                    "work_date": "2026-07-17",
+                    "staff_name": "Kei",
+                    "site": "Alias Site",
+                    "summary": "维修完成",
+                    "completion_status": "已完成",
+                },
+            )
+            db.insert_schedule_rows(
+                [
+                    {
+                        "work_date": "2026-07-17",
+                        "staff_name": "Kei",
+                        "site": "Alias Site",
+                        "task_text": "例检",
+                        "source_file": "manual.xlsx",
+                    }
+                ]
+            )
+            db.save_issue_record(
+                {
+                    "reported_by": "Kei",
+                    "work_date": "2026-07-17",
+                    "site": "Alias Site",
+                    "issue_text": "故障",
+                    "issue_summary": "故障",
+                }
+            )
+            db.save_task_event(
+                {
+                    "event_type": "followup",
+                    "sender": "Admin",
+                    "site": "Alias Site",
+                    "work_date": "2026-07-17",
+                    "event_text": "请跟进",
+                }
+            )
+
+            self.assertEqual(db.list_repair_records_for_message(message["id"])[0]["site"], "规范地点")
+            self.assertEqual(db.find_schedule_row(
+                {
+                    "work_date": "2026-07-17",
+                    "staff_name": "Kei",
+                    "site": "Alias Site",
+                    "task_text": "例检",
+                    "source_file": "manual.xlsx",
+                }
+            )["site"], "规范地点")
+            self.assertEqual(db.list_issue_records(limit=1)[0]["site"], "规范地点")
+            self.assertEqual(db.list_task_events(limit=1)[0]["site"], "规范地点")
+
     def test_sync_site_configs_deactivates_removed_sites(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             db = Database(Path(temp_dir) / "test.db")
@@ -1135,6 +1210,87 @@ class DatabaseTests(unittest.TestCase):
 
             self.assertEqual(len(reminders), 1)
             self.assertEqual(reminders[0]["site"], "淺水灣")
+
+    def test_daily_pdf_new_version_preserves_stable_ids_and_deactivates_removed_tasks(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db = Database(Path(temp_dir) / "test.db")
+            db.init()
+            first_document = db.start_schedule_document(
+                {
+                    "work_date": "2026-07-17",
+                    "source_path": "/data/work schedule v1.pdf",
+                    "source_filename": "work schedule v1.pdf",
+                    "sha256": "a" * 64,
+                    "modified_at_ns": 1,
+                }
+            )
+            first_rows = [
+                {
+                    "staff_name": "Brian",
+                    "site": "地点A",
+                    "task_text": "例检",
+                    "source_file": "/data/work schedule v1.pdf",
+                    "source_key": "stable-a",
+                },
+                {
+                    "staff_name": "Kei",
+                    "site": "地点B",
+                    "task_text": "维修",
+                    "source_file": "/data/work schedule v1.pdf",
+                    "source_key": "removed-b",
+                },
+            ]
+            self.assertEqual(
+                db.replace_daily_pdf_schedules(first_document, "2026-07-17", first_rows),
+                {"inserted": 2, "kept": 0, "deactivated": 0},
+            )
+            with db.connect() as conn:
+                original_id = conn.execute(
+                    "SELECT id FROM work_schedules WHERE source_key = 'stable-a'"
+                ).fetchone()["id"]
+
+            second_document = db.start_schedule_document(
+                {
+                    "work_date": "2026-07-17",
+                    "source_path": "/data/work schedule v2.pdf",
+                    "source_filename": "work schedule v2.pdf",
+                    "sha256": "b" * 64,
+                    "modified_at_ns": 2,
+                }
+            )
+            result = db.replace_daily_pdf_schedules(
+                second_document,
+                "2026-07-17",
+                [
+                    {**first_rows[0], "source_file": "/data/work schedule v2.pdf"},
+                    {
+                        "staff_name": "Sam",
+                        "site": "地点C",
+                        "task_text": "报价",
+                        "source_file": "/data/work schedule v2.pdf",
+                        "source_key": "new-c",
+                    },
+                ],
+            )
+
+            with db.connect() as conn:
+                stable = dict(conn.execute(
+                    "SELECT id, is_active, source_document_id FROM work_schedules WHERE source_key = 'stable-a'"
+                ).fetchone())
+                removed = dict(conn.execute(
+                    "SELECT is_active FROM work_schedules WHERE source_key = 'removed-b'"
+                ).fetchone())
+
+            self.assertEqual(result, {"inserted": 1, "kept": 1, "deactivated": 1})
+            self.assertEqual(stable["id"], original_id)
+            self.assertEqual(stable["source_document_id"], second_document)
+            self.assertEqual(stable["is_active"], 1)
+            self.assertEqual(removed["is_active"], 0)
+            self.assertEqual(len(db.list_schedules_without_repair_records("2026-07-17")), 2)
+            self.assertEqual(
+                db.list_schedules_without_repair_records("2026-07-17", include_daily_pdf=False),
+                [],
+            )
 
 
 if __name__ == "__main__":

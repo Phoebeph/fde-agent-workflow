@@ -1,7 +1,12 @@
 import unittest
+from pathlib import Path
+import tempfile
+from types import SimpleNamespace
+from unittest.mock import patch
 
-from app.main import _analyze_configured_site_segments, _build_analysis_groups
-from app.services.customer_config import CustomerSite
+from app.database import Database
+from app.main import _analyze_configured_site_segments, _build_analysis_groups, _run_auto_followups
+from app.services.customer_config import CustomerSettings, CustomerSite
 from app.services.site_policy import ConfiguredSitePolicy
 
 
@@ -176,6 +181,67 @@ class MainSiteSegmentAnalysisTests(unittest.TestCase):
         )
 
         self.assertEqual([item["work_date"] for item in analyses], ["2026-07-15", "2026-07-15"])
+
+
+class MainDailyPdfFollowupTests(unittest.TestCase):
+    def test_daily_pdf_tasks_are_grouped_into_one_reminder_per_staff(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db = Database(Path(temp_dir) / "test.db")
+            db.init()
+            document_id = db.start_schedule_document(
+                {
+                    "work_date": "2026-07-17",
+                    "source_path": "/data/work schedule.pdf",
+                    "source_filename": "work schedule.pdf",
+                    "sha256": "c" * 64,
+                    "modified_at_ns": 1,
+                }
+            )
+            db.replace_daily_pdf_schedules(
+                document_id,
+                "2026-07-17",
+                [
+                    {
+                        "staff_name": "Brian",
+                        "site": "地点A",
+                        "task_text": "例检",
+                        "source_file": "/data/work schedule.pdf",
+                        "source_key": "task-a",
+                    },
+                    {
+                        "staff_name": "Brian",
+                        "site": "地点B",
+                        "task_text": "门禁维修",
+                        "source_file": "/data/work schedule.pdf",
+                        "source_key": "task-b",
+                    },
+                ],
+            )
+            customer_settings = CustomerSettings(
+                sites=[
+                    CustomerSite(id="a", name="地点A"),
+                    CustomerSite(id="b", name="地点B"),
+                ],
+                loaded=True,
+            )
+            with (
+                patch("app.main.db", db),
+                patch("app.main.settings", SimpleNamespace(feishu_sync_available=False)),
+                patch("app.main.feishu_client", return_value=object()),
+                patch("app.main._current_customer_settings", return_value=customer_settings),
+            ):
+                result = _run_auto_followups(
+                    "2026-07-17",
+                    100,
+                    include_daily_pdf=True,
+                )
+
+            reminders = db.list_pending_reminders()
+            self.assertEqual(result["checked_schedules"], 2)
+            self.assertEqual(result["reminders_created"], 1)
+            self.assertEqual(len(reminders), 1)
+            self.assertIn("地点A：例检", reminders[0]["content"])
+            self.assertIn("地点B：门禁维修", reminders[0]["content"])
 
 
 if __name__ == "__main__":

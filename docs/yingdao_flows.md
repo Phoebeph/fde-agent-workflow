@@ -153,6 +153,28 @@ POST http://127.0.0.1:8000/api/followups/run?work_date=2026-06-10&limit=100
 
 后端会自动去重；同一条维修记录已有 `pending` 或 `sent` 提醒时，不会重复创建新提醒。
 
+配置中当天最后一个提醒时间的 automation job 会额外带：
+
+```json
+{"actions": ["sync_daily_schedule_pdf", "run_followups", "send_reminders"]}
+```
+
+影刀此时先调用：
+
+```http
+POST /api/schedules/sync-daily-pdf?work_date=2026-06-10
+```
+
+再调用 `/api/followups/run?...&include_daily_pdf=true`。其他提醒时段明确传
+`include_daily_pdf=false`，因此不会提前催当天 PDF 排班。同步返回 `no_file`、
+`ocr_required`、`ai_unavailable` 或 `failed` 时，影刀继续原有提醒流程，但本轮不启用
+PDF 排班提醒；`imported` 或 `unchanged` 时才启用。
+
+PDF 放在 `DATA_ROOT/YYYY/MM/DD/`，目录日期是权威工作日期。文件名匹配
+`work schedule` 或常见误拼 `work schedual`（大小写和空格不敏感），同日选择修改时间最新的文件。
+员工的多个未汇报任务会合并为一条提醒。只有该员工发出的、能匹配计划地点或任务的 WhatsApp
+工作汇报才算回复；无关聊天不会取消提醒。
+
 后端生成维修记录时会写入 `completion_status`、`completion_score`、`completion_level`。后续如果提醒很多，影刀或管理界面可以按 `completion_score` 从低到高优先处理，低分代表更需要马上跟进。
 
 影刀获取待发送提醒：
@@ -184,6 +206,9 @@ Body:
 ## Flow 4: schedule_ocr_import
 
 如果排班只提供 PDF/图片，建议用影刀 OCR 或人工校验后，把结构化结果提交给后端：
+
+该人工导入接口继续保留，适用于纯图片 PDF。自动 PDF 同步第一版只处理有文字层的 PDF；
+纯图片 PDF 会标记为 `ocr_required`，不会自动生成不可靠任务。
 
 ```http
 POST http://127.0.0.1:8000/api/schedules/import

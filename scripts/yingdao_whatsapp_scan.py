@@ -123,11 +123,30 @@ def run_reminder_cycle_job(page: Any, job: dict[str, Any]) -> dict[str, Any]:
     work_date = job_work_date(job)
     site_names = [str(item).strip() for item in job.get("site_names", []) if str(item).strip()]
     site_names_csv = ",".join(site_names)
+    actions = {str(item).strip() for item in job.get("actions", []) if str(item).strip()}
+    schedule_pdf_sync: dict[str, Any] | None = None
+    include_daily_pdf = False
+    if "sync_daily_schedule_pdf" in actions:
+        try:
+            schedule_pdf_sync = post_json(
+                build_url(
+                    f"{BACKEND_BASE_URL}/api/schedules/sync-daily-pdf",
+                    work_date=work_date,
+                ),
+                {},
+                timeout=120,
+            )
+            include_daily_pdf = str(schedule_pdf_sync.get("status") or "") in {"imported", "unchanged"}
+        except Exception as exc:
+            # PDF synchronization is best-effort and must not interrupt existing reminders.
+            schedule_pdf_sync = {"status": "failed", "error": str(exc)[:500]}
+
     followup_url = build_url(
         f"{BACKEND_BASE_URL}/api/followups/run",
         work_date=work_date,
         limit=100,
         site_names=site_names_csv or None,
+        include_daily_pdf=str(include_daily_pdf).lower(),
     )
     followup_result = post_json(followup_url, {})
 
@@ -180,6 +199,8 @@ def run_reminder_cycle_job(page: Any, job: dict[str, Any]) -> dict[str, Any]:
         "group_name": group_name,
         "work_date": work_date,
         "site_names": site_names,
+        "schedule_pdf_sync": schedule_pdf_sync,
+        "include_daily_pdf": include_daily_pdf,
         "followups_checked_schedules": followup_result.get("checked_schedules", 0),
         "followups_checked_repair_records": followup_result.get("checked_repair_records", 0),
         "followups_reminders_created": followup_result.get("reminders_created", 0),
@@ -869,10 +890,10 @@ def scroll_messages(page: Any, delta_y: int) -> None:
     page.evaluate(f"document.querySelector('{CONTAINER_SELECTOR}')?.scrollBy(0, {delta_y})")
 
 
-def post_json(url: str, payload: dict[str, Any]) -> dict[str, Any]:
+def post_json(url: str, payload: dict[str, Any], *, timeout: int = 60) -> dict[str, Any]:
     data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     request = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST")
-    with urllib.request.urlopen(request, timeout=60) as response:
+    with urllib.request.urlopen(request, timeout=timeout) as response:
         return json.loads(response.read().decode("utf-8"))
 
 

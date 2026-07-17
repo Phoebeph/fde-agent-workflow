@@ -79,7 +79,7 @@ config/customer_settings.json
 1. 调 `GET /api/automation/next` 领取任务。
 2. 无任务立即退出。
 3. `scan_cycle` 时打开指定群，执行消息采集和附件下载。
-4. `reminder_cycle` 时先调 `/api/followups/run`，再按站点过滤拉 `/api/reminders/pending` 并发送。
+4. `reminder_cycle` 时执行 `/api/followups/run`；当天最后一个提醒时段会先同步日期目录中的 Work Schedule PDF，再按站点过滤拉取并发送提醒。
 5. 调 `POST /api/automation/report` 回写结果。
 
 后端负责按 `config/customer_settings.json` 计算什么时候该扫哪个群、什么时候该发哪个群对应站点的提醒。影刀不再自己判断时间。
@@ -108,6 +108,7 @@ downloads\  影刀临时下载目录
 logs\       后端和影刀日志
 backups\    数据库备份
 YYYY\MM\DD\ 按日期、地点归档附件和 Excel
+YYYY\MM\DD\*work schedule*.pdf  当天排班 PDF（日期以目录为准）
 by_site\地点\YYYY\MM\DD\维修\  按地点镜像的维修 Excel 和附件
 by_site\地点\YYYY\MM\DD\报价\  按地点镜像的报价 Excel 和附件
 by_site\地点\YYYY\地点_YYYY_总表.xlsx  地点年度汇总
@@ -235,6 +236,17 @@ curl -X POST 'http://127.0.0.1:8000/api/schedules/check-unreplied?work_date=2026
 ```bash
 curl -X POST 'http://127.0.0.1:8000/api/followups/run?work_date=2026-06-10&limit=100'
 ```
+
+每日排班 PDF 可直接放入 `DATA_ROOT/YYYY/MM/DD/`。文件名不区分大小写，支持
+`work schedule`、`work schedual` 及无空格写法；同日多份文件选择修改时间最新的一份。
+最后一个提醒时段会自动调用：
+
+```bash
+curl -X POST 'http://127.0.0.1:8000/api/schedules/sync-daily-pdf?work_date=2026-06-10'
+```
+
+有可用文字层且解析成功时，排班写入 `work_schedules`，没有对应 WhatsApp 工作汇报的员工按人合并提醒。
+没有 PDF 时返回 `no_file`，只运行原有提醒；扫描件无文字层返回 `ocr_required`，不会根据不可靠内容生成提醒。
 
 ## Automation Scheduling
 

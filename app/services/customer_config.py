@@ -76,6 +76,14 @@ class CustomerPhotoRecordRules:
 
 
 @dataclass(frozen=True)
+class CustomerDailySchedulePdfConfig:
+    enabled: bool = True
+    filename_keywords: list[str] = field(
+        default_factory=lambda: ["work schedule", "work schedual"]
+    )
+
+
+@dataclass(frozen=True)
 class CustomerSettings:
     path: str = ""
     timezone: str = "Asia/Hong_Kong"
@@ -83,6 +91,7 @@ class CustomerSettings:
     sites: list[CustomerSite] = field(default_factory=list)
     event_rules: CustomerEventRules = field(default_factory=CustomerEventRules)
     photo_record_rules: CustomerPhotoRecordRules = field(default_factory=CustomerPhotoRecordRules)
+    daily_schedule_pdf: CustomerDailySchedulePdfConfig = field(default_factory=CustomerDailySchedulePdfConfig)
     loaded: bool = False
     error: str = ""
     validation_errors: list[str] = field(default_factory=list)
@@ -208,6 +217,7 @@ def _parse_customer_settings(data: dict[str, Any], path: Path) -> CustomerSettin
         sites=sites,
         event_rules=_parse_event_rules(data.get("event_rules")),
         photo_record_rules=_parse_photo_record_rules(data.get("photo_record_rules")),
+        daily_schedule_pdf=_parse_daily_schedule_pdf_config(data.get("daily_schedule_pdf")),
         loaded=True,
     )
 
@@ -322,6 +332,18 @@ def _parse_photo_record_rules(value: Any) -> CustomerPhotoRecordRules:
         require_photo_for_replacement=bool(value.get("require_photo_for_replacement", True)),
         require_pdf_report_for_atal_material=bool(value.get("require_pdf_report_for_atal_material", True)),
         required_photo_types=_string_list(value.get("required_photo_types")),
+    )
+
+
+def _parse_daily_schedule_pdf_config(value: Any) -> CustomerDailySchedulePdfConfig:
+    if value is None:
+        return CustomerDailySchedulePdfConfig()
+    if not isinstance(value, dict):
+        raise ValueError("daily_schedule_pdf must be an object")
+    keywords = _string_list(value.get("filename_keywords"))
+    return CustomerDailySchedulePdfConfig(
+        enabled=bool(value.get("enabled", True)),
+        filename_keywords=keywords or ["work schedule", "work schedual"],
     )
 
 

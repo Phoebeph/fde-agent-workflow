@@ -339,6 +339,55 @@ class CompletionTests(unittest.TestCase):
         self.assertEqual(analysis["completion_level"], "低")
         self.assertIn("工作结果回复", analysis["missing_items"])
 
+    def test_unrelated_chat_does_not_complete_daily_pdf_schedule(self) -> None:
+        analysis = apply_schedule_completion(
+            analysis={"completion_status": "已完成", "missing_items": [], "next_actions": []},
+            message={
+                "sender": "Brian",
+                "sent_at": "2026-06-10 11:00",
+                "text": "收到，谢谢。",
+                "attachment_hints": [],
+            },
+            attachments=[],
+            schedules=[
+                {
+                    "id": 20,
+                    "source_type": "daily_pdf",
+                    "work_date": "2026-06-10",
+                    "staff_name": "Brian",
+                    "site": "商场B",
+                    "task_text": "门磁故障维修",
+                }
+            ],
+        )
+
+        self.assertNotIn("work_schedule_id", analysis)
+        self.assertEqual(analysis["schedule_match_status"], "未匹配计划任务")
+
+    def test_matching_site_completes_daily_pdf_schedule(self) -> None:
+        analysis = apply_schedule_completion(
+            analysis={"completion_status": "已完成", "missing_items": [], "next_actions": []},
+            message={
+                "sender": "Brian",
+                "sent_at": "2026-06-10 11:00",
+                "text": "商场B 门磁维修完成，测试正常。",
+                "attachment_hints": [],
+            },
+            attachments=[],
+            schedules=[
+                {
+                    "id": 21,
+                    "source_type": "daily_pdf",
+                    "work_date": "2026-06-10",
+                    "staff_name": "Brian",
+                    "site": "商场B",
+                    "task_text": "门磁故障维修",
+                }
+            ],
+        )
+
+        self.assertEqual(analysis["work_schedule_id"], 21)
+
 
 if __name__ == "__main__":
     unittest.main()

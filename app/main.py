@@ -55,6 +55,7 @@ from app.services.issues import issue_candidate_from_message, issue_schedule_mat
 from app.services.local_export import export_daily_workbook, export_site_classified_workbooks
 from app.services.reminder_text import generate_analysis_reminder_message, generate_reminder_message
 from app.services.rules import load_rules_from_xlsx
+from app.services.schedule_pdf import DAILY_PDF_SOURCE, sync_daily_schedule_pdf
 from app.services.site_policy import ConfiguredSitePolicy, SiteSegment, business_categories
 
 
@@ -172,6 +173,10 @@ def _customer_settings_public_dict(current: CustomerSettings) -> dict[str, objec
             "require_photo_for_replacement": current.photo_record_rules.require_photo_for_replacement,
             "require_pdf_report_for_atal_material": current.photo_record_rules.require_pdf_report_for_atal_material,
             "required_photo_types": current.photo_record_rules.required_photo_types,
+        },
+        "daily_schedule_pdf": {
+            "enabled": current.daily_schedule_pdf.enabled,
+            "filename_keywords": current.daily_schedule_pdf.filename_keywords,
         },
     }
 
@@ -317,6 +322,25 @@ def _apply_site_mapping(analysis: dict[str, object], message: dict[str, object])
     matched = policy.resolve(search_text)
     mapped["site"] = matched.site_name if matched.status == "matched" else ""
     return mapped
+
+
+def _configured_site_name_for_message(
+    site: object,
+    message: dict[str, object],
+) -> str:
+    policy = ConfiguredSitePolicy.for_group(
+        _current_customer_settings(),
+        str(message.get("group_name") or ""),
+    )
+    raw_site = str(site or "").strip()
+    canonical = policy.canonical_name(raw_site)
+    if canonical:
+        return canonical
+    for text in (raw_site, str(message.get("text") or "")):
+        resolution = policy.resolve(text)
+        if resolution.status == "matched":
+            return resolution.site_name
+    return ""
 
 
 def _allowed_attachment_extensions(attachment_type: str) -> set[str] | None:
@@ -940,6 +964,8 @@ def _role_senders(role: str, fallback: tuple[str, ...]) -> tuple[str, ...]:
 def _sync_schedule_gap(
     schedule: dict[str, object],
     feishu: FeishuClient,
+    *,
+    create_reminder: bool = True,
 ) -> dict[str, object]:
     analysis = schedule_gap_analysis(schedule)
     message = {
@@ -956,7 +982,7 @@ def _sync_schedule_gap(
         else:
             feishu_record_id = db.save_mock_feishu_record(fields)
     record_id = db.save_schedule_gap_record(schedule, analysis, feishu_record_id)
-    reminder_created = (
+    reminder_created = create_reminder and (
         db.create_reminder_if_needed(record_id, analysis)
         if _site_is_watched_for_reminder(analysis)
         else False
@@ -1001,21 +1027,89 @@ def _repair_record_followup_analysis(record: dict[str, object]) -> dict[str, obj
     return analysis
 
 
-def _run_auto_followups(work_date: str, limit: int, site_names: list[str] | None = None) -> dict[str, object]:
+def _run_auto_followups(
+    work_date: str,
+    limit: int,
+    site_names: list[str] | None = None,
+    *,
+    include_daily_pdf: bool = False,
+) -> dict[str, object]:
     feishu = feishu_client()
     schedule_records = []
     existing_record_items = []
     reminders_created = 0
     feishu_synced = 0
 
-    schedules = db.list_schedules_without_repair_records(work_date, limit, site_names=site_names)
-    for schedule in schedules:
+    schedules = db.list_schedules_without_repair_records(
+        work_date,
+        limit,
+        site_names=site_names,
+        include_daily_pdf=include_daily_pdf,
+    )
+    manual_schedules = [item for item in schedules if item.get("source_type") != DAILY_PDF_SOURCE]
+    pdf_schedules = [item for item in schedules if item.get("source_type") == DAILY_PDF_SOURCE]
+    for schedule in manual_schedules:
         item = _sync_schedule_gap(schedule, feishu)
         if item.get("mock_feishu_record_id"):
             feishu_synced += 1
         if item["reminder_created"]:
             reminders_created += 1
         schedule_records.append(item)
+
+    pdf_groups: dict[str, list[dict[str, object]]] = {}
+    for schedule in pdf_schedules:
+        pdf_groups.setdefault(str(schedule.get("staff_name") or "").strip(), []).append(schedule)
+    for staff_name, grouped_schedules in pdf_groups.items():
+        grouped_items = []
+        for schedule in grouped_schedules:
+            item = _sync_schedule_gap(schedule, feishu, create_reminder=False)
+            if item.get("mock_feishu_record_id"):
+                feishu_synced += 1
+            grouped_items.append(item)
+            schedule_records.append(item)
+        if not grouped_items or not staff_name:
+            continue
+        task_lines = [
+            f"{schedule.get('site') or '未知地点'}：{schedule.get('task_text') or ''}".strip()
+            for schedule in grouped_schedules
+        ]
+        first = grouped_schedules[0]
+        reminder_text = "\n".join(
+            [
+                f"@{staff_name} {staff_name}，今日工作计划仲未收到对应汇报：",
+                *[f"{index}. {line}" for index, line in enumerate(task_lines, start=1)],
+                "",
+                "请补充当天工作结果。",
+            ]
+        )
+        aggregate_analysis = {
+            "work_date": work_date,
+            "staff_name": staff_name,
+            "site": first.get("site"),
+            "task_text": "\n".join(task_lines),
+            "summary": f"PDF 工作计划未见 WhatsApp 对应汇报：{' ；'.join(task_lines)}",
+            "completion_status": "未回复",
+            "missing_items": ["工作结果回复"],
+            "next_actions": ["提醒同事补充当天工作结果"],
+            "reminder_text": reminder_text,
+        }
+        watched = any(
+            _site_is_watched_for_reminder(
+                {
+                    "site": schedule.get("site"),
+                    "summary": schedule.get("task_text"),
+                }
+            )
+            for schedule in grouped_schedules
+        )
+        reminder_created = (
+            db.create_reminder_if_needed(int(grouped_items[0]["repair_record_id"]), aggregate_analysis)
+            if watched
+            else False
+        )
+        if reminder_created:
+            reminders_created += 1
+            grouped_items[0]["reminder_created"] = True
 
     remaining_limit = max(0, limit - len(schedules))
     repair_records = (
@@ -1050,6 +1144,7 @@ def _run_auto_followups(work_date: str, limit: int, site_names: list[str] | None
     return {
         "work_date": work_date,
         "site_names": site_names or [],
+        "include_daily_pdf": include_daily_pdf,
         "checked_schedules": len(schedules),
         "checked_repair_records": len(repair_records),
         "reminders_created": reminders_created,
@@ -1121,6 +1216,7 @@ def _discover_and_save_dispatch_schedules(messages: list[dict[str, object]]) -> 
             followup_manager_senders=followup_senders,
         )
         if event:
+            event["site"] = _configured_site_name_for_message(event.get("site"), message)
             matched_schedule = db.find_schedule_for_event(
                 work_date=event.get("work_date"),
                 target_name=event.get("target_name"),
@@ -1149,6 +1245,7 @@ def _discover_and_save_dispatch_schedules(messages: list[dict[str, object]]) -> 
             followup_manager_senders=followup_senders,
         )
         if issue:
+            issue["site"] = _configured_site_name_for_message(issue.get("site"), message)
             saved_issue = db.save_issue_record(issue)
             db.mark_message_done(int(message["id"]))
             issue_records.append(
@@ -1165,6 +1262,18 @@ def _discover_and_save_dispatch_schedules(messages: list[dict[str, object]]) -> 
         messages,
         dispatch_manager_senders=dispatch_senders,
     )
+    messages_by_id = {message.get("id"): message for message in messages}
+    schedules = [
+        {
+            **schedule,
+            "site": _configured_site_name_for_message(
+                schedule.get("site"),
+                messages_by_id.get(schedule.get("raw_message_id"), {}),
+            ),
+        }
+        for schedule in schedules
+    ]
+    schedules = [schedule for schedule in schedules if schedule.get("site")]
     if not schedules:
         return {
             "candidates": 0,
@@ -1787,7 +1896,16 @@ def ingest_attachment(
         _current_customer_settings(),
         str(message.get("group_name") or ""),
     )
-    selected_records = list(repair_records)
+    selected_records = []
+    for record in repair_records:
+        record_site = str(record.get("site") or "").strip()
+        canonical_site = policy.canonical_name(record_site)
+        if not canonical_site and record_site:
+            resolution = policy.resolve(record_site)
+            canonical_site = resolution.site_name if resolution.status == "matched" else ""
+        if not canonical_site:
+            continue
+        selected_records.append({**record, "site": canonical_site})
     if payload.repair_record_id:
         selected_records = [record for record in repair_records if int(record["id"]) == payload.repair_record_id]
         if not selected_records:
@@ -1959,6 +2077,31 @@ def import_schedules(payload: ScheduleImportIn) -> dict[str, int]:
     return db.insert_schedule_rows(rows)
 
 
+def _sync_daily_schedule_pdf_for_date(work_date: str) -> dict[str, object]:
+    current = _current_customer_settings()
+    policy = ConfiguredSitePolicy([site for site in current.sites if site.enabled])
+    return sync_daily_schedule_pdf(
+        db=db,
+        deepseek=deepseek_client(),
+        data_root=settings.data_root,
+        work_date=work_date,
+        enabled=current.daily_schedule_pdf.enabled,
+        filename_keywords=current.daily_schedule_pdf.filename_keywords,
+        site_policy=policy,
+        resolve_staff_name=db.resolve_staff_name,
+    )
+
+
+@app.post("/api/schedules/sync-daily-pdf")
+def sync_daily_schedule_pdf_endpoint(
+    work_date: str = Query(min_length=10, max_length=10),
+) -> dict[str, object]:
+    try:
+        return _sync_daily_schedule_pdf_for_date(work_date)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.post("/api/schedules/discover-from-messages")
 def discover_schedules_from_messages(limit: int = Query(default=100, ge=1, le=500)) -> dict[str, object]:
     messages = db.list_recent_messages(limit)
@@ -1968,7 +2111,7 @@ def discover_schedules_from_messages(limit: int = Query(default=100, ge=1, le=50
 @app.post("/api/schedules/check-unreplied")
 def check_unreplied_schedules(work_date: str = Query(min_length=10), limit: int = Query(default=100, ge=1, le=500)) -> dict[str, object]:
     created = 0
-    schedules = db.list_schedules_without_repair_records(work_date, limit)
+    schedules = db.list_schedules_without_repair_records(work_date, limit, include_daily_pdf=False)
     records: list[dict[str, object]] = []
     feishu = feishu_client()
     for schedule in schedules:
@@ -1984,12 +2127,18 @@ def run_followups(
     work_date: str | None = Query(default=None, min_length=10),
     limit: int = Query(default=100, ge=1, le=500),
     site_names: str | None = Query(default=None),
+    include_daily_pdf: bool = Query(default=False),
 ) -> dict[str, object]:
     target_date = work_date or datetime.now().strftime("%Y-%m-%d")
     parsed_site_names = parse_site_names_csv(site_names)
     run_id = f"run_{uuid.uuid4().hex[:16]}"
     try:
-        result = _run_auto_followups(target_date, limit, site_names=parsed_site_names)
+        result = _run_auto_followups(
+            target_date,
+            limit,
+            site_names=parsed_site_names,
+            include_daily_pdf=include_daily_pdf,
+        )
         db.save_run_record(
             {
                 "run_id": run_id,

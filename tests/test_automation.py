@@ -58,6 +58,19 @@ class AutomationScheduleTests(unittest.TestCase):
         self.assertEqual(jobs[1]["site_names"], ["淺水灣"])
         self.assertEqual(jobs[1]["actions"], ["run_followups", "send_reminders"])
 
+        final_jobs = build_due_automation_jobs(
+            settings,
+            now=datetime.datetime(2026, 6, 28, 17, 1, tzinfo=datetime.timezone.utc),
+        )
+        final_reminder = [
+            job for job in final_jobs
+            if job["job_type"] == "reminder_cycle" and job["scheduled_for"].endswith("01:00:00+08:00")
+        ][0]
+        self.assertEqual(
+            final_reminder["actions"],
+            ["sync_daily_schedule_pdf", "run_followups", "send_reminders"],
+        )
+
     def test_parse_site_names_csv_deduplicates_and_strips(self) -> None:
         self.assertEqual(parse_site_names_csv("A, B ,A,,C"), ["A", "B", "C"])
         self.assertEqual(parse_site_names_csv(None), [])

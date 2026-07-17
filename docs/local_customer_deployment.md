@@ -18,6 +18,7 @@ C:\Users\test\data\
   2026\
     06\
       19\
+        19-6-2026 Work Schedule.pdf  当天排班（文件名日期仅供阅读，以目录日期为准）
         2026-06-19_维修与提醒总表.xlsx
         The_SOUI\
           2026-06-19_The_SOUI_维修与提醒表.xlsx
@@ -87,6 +88,8 @@ config\customer_settings.json
 - `whatsapp.groups[].reminder`：群提醒时间槽。
 - `whatsapp.groups[].related_site_ids`：该群 reminder job 只处理这些地点。
 - `sites[]`：地点标准名和别名。
+- `daily_schedule_pdf.enabled`：是否在最后提醒时段自动同步每日排班 PDF。
+- `daily_schedule_pdf.filename_keywords`：排班 PDF 文件名关键词，默认兼容 `work schedule` 和 `work schedual`。
 
 正式本地部署不需要配置飞书，也不需要开启 `FEISHU_MOCK_MODE`。维修记录以 `repair_records`、每日 Excel 和本地附件归档为准。
 
@@ -101,6 +104,8 @@ config\customer_settings.json
 
 - `raw_messages`：WhatsApp 原始消息。
 - `repair_records`：清洗后的维修记录；目标是一条实际工作事项一行。
+- `schedule_documents`：每日排班 PDF 的 hash、解析状态、导入与拒绝数量；失败版本不会覆盖上一成功版本。
+- `work_schedules`：人工排班、派工任务及每日 PDF 解析出的有效任务。
 - `attachments`：附件索引，只保存文件路径、hash、类型，不把图片/PDF 二进制写进数据库。
 - `reminders`：待影刀发送的 WhatsApp 提醒内容。
 - `sites`：客户自定义地点词库，包含地点名称、别名/关键词、说明和启用状态。
@@ -108,6 +113,21 @@ config\customer_settings.json
 - `DATA_ROOT\年\月\日\YYYY-MM-DD_维修与提醒总表.xlsx`：当天所有地点的综合检查表。
 - `DATA_ROOT\by_site\地点\年\月\日\维修\`、`DATA_ROOT\by_site\地点\年\月\日\报价\`：新增的地点优先分类 Excel 和附件镜像，无数据时不创建目录。
 - `DATA_ROOT\by_site\地点\年\地点_年_总表.xlsx`：该地点的年度维修、报价、附件和提醒汇总。
+
+## 每日 Work Schedule PDF
+
+将带文字层的 PDF 放到当天日期目录，例如：
+
+```text
+C:\Users\test\data\2026\07\17\17-7-2026 Work Schedule 1st 更新版.pdf
+```
+
+系统不信任文件名和 PDF 正文中的日期，所有导入任务的日期固定取目录 `2026/07/17`。
+同一天多份匹配文件以修改时间最新的一份为准；相同 hash 重扫不会重复入库。新版成功解析后，
+未变化任务保留原 ID，删除的任务停用；新版失败则继续保留上一份成功排班。
+
+没有 PDF 时返回 `no_file`，不创建 PDF 排班任务或提醒，原有提醒继续运行。纯扫描图片无文字层时
+返回 `ocr_required`；DeepSeek 不可用时返回 `ai_unavailable`。这些状态都不会阻断已有业务提醒。
 
 ## 综合导出文件建议
 

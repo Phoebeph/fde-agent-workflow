@@ -97,6 +97,26 @@ CREATE TABLE IF NOT EXISTS rules (
     UNIQUE(title, source_file)
 );
 
+CREATE TABLE IF NOT EXISTS schedule_documents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    work_date TEXT NOT NULL,
+    source_path TEXT NOT NULL,
+    source_filename TEXT NOT NULL,
+    sha256 TEXT NOT NULL,
+    modified_at_ns INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'processing',
+    page_count INTEGER NOT NULL DEFAULT 0,
+    extracted_chars INTEGER NOT NULL DEFAULT 0,
+    imported_rows INTEGER NOT NULL DEFAULT 0,
+    rejected_rows INTEGER NOT NULL DEFAULT 0,
+    error_summary TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(work_date, sha256)
+);
+
+CREATE INDEX IF NOT EXISTS idx_schedule_documents_date_status ON schedule_documents(work_date, status);
+
 CREATE TABLE IF NOT EXISTS work_schedules (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     work_date TEXT NOT NULL,
@@ -107,10 +127,18 @@ CREATE TABLE IF NOT EXISTS work_schedules (
     source_file TEXT,
     ocr_confidence REAL,
     review_status TEXT NOT NULL DEFAULT 'pending',
-    created_at TEXT NOT NULL
+    source_document_id INTEGER,
+    source_type TEXT NOT NULL DEFAULT 'manual',
+    source_key TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY(source_document_id) REFERENCES schedule_documents(id) ON DELETE SET NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_work_schedules_date_staff ON work_schedules(work_date, staff_name);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_work_schedules_daily_source_key
+ON work_schedules(source_type, source_key)
+WHERE source_type = 'daily_pdf' AND source_key IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS repair_records (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -417,6 +445,24 @@ class Database:
             conn.execute("ALTER TABLE repair_records ADD COLUMN item_index INTEGER NOT NULL DEFAULT 0")
         if "business_category" not in repair_columns:
             conn.execute("ALTER TABLE repair_records ADD COLUMN business_category TEXT NOT NULL DEFAULT '维修'")
+        schedule_columns = {
+            row["name"] for row in conn.execute("PRAGMA table_info(work_schedules)").fetchall()
+        }
+        if "source_document_id" not in schedule_columns:
+            conn.execute("ALTER TABLE work_schedules ADD COLUMN source_document_id INTEGER")
+        if "source_type" not in schedule_columns:
+            conn.execute("ALTER TABLE work_schedules ADD COLUMN source_type TEXT NOT NULL DEFAULT 'manual'")
+        if "source_key" not in schedule_columns:
+            conn.execute("ALTER TABLE work_schedules ADD COLUMN source_key TEXT")
+        if "is_active" not in schedule_columns:
+            conn.execute("ALTER TABLE work_schedules ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1")
+        conn.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_work_schedules_daily_source_key
+            ON work_schedules(source_type, source_key)
+            WHERE source_type = 'daily_pdf' AND source_key IS NOT NULL
+            """
+        )
         indexes = conn.execute("PRAGMA index_list(repair_records)").fetchall()
         unique_columns = {
             tuple(
@@ -757,6 +803,7 @@ class Database:
             "raw_messages",
             "attachments",
             "rules",
+            "schedule_documents",
             "work_schedules",
             "repair_records",
             "reminders",
@@ -1169,12 +1216,15 @@ class Database:
         if not candidate:
             return candidate
         normalized = candidate.casefold()
+        matches: set[str] = set()
         for site in self.list_site_configs():
             if not site.get("is_active", True):
                 continue
             aliases = [site.get("name"), *site.get("aliases", [])]
             if any(str(alias or "").strip().casefold() == normalized for alias in aliases):
-                return str(site.get("name") or candidate)
+                matches.add(str(site.get("name") or candidate))
+        if len(matches) == 1:
+            return next(iter(matches))
         return candidate
 
     def match_site_in_text(self, text: str) -> dict[str, Any] | None:
@@ -1323,12 +1373,191 @@ class Database:
             ).fetchone()
         return dict(row) if row else None
 
+    def get_schedule_document_by_hash(self, work_date: str, sha256: str) -> dict[str, Any] | None:
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM schedule_documents WHERE work_date = ? AND sha256 = ? LIMIT 1",
+                (work_date, sha256),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def start_schedule_document(self, document: dict[str, Any]) -> int:
+        now = utc_now()
+        with self.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO schedule_documents (
+                    work_date, source_path, source_filename, sha256, modified_at_ns,
+                    status, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, 'processing', ?, ?)
+                ON CONFLICT(work_date, sha256) DO UPDATE SET
+                    source_path = excluded.source_path,
+                    source_filename = excluded.source_filename,
+                    modified_at_ns = excluded.modified_at_ns,
+                    status = 'processing',
+                    error_summary = '',
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    document["work_date"],
+                    document["source_path"],
+                    document["source_filename"],
+                    document["sha256"],
+                    int(document.get("modified_at_ns") or 0),
+                    now,
+                    now,
+                ),
+            )
+            row = conn.execute(
+                "SELECT id FROM schedule_documents WHERE work_date = ? AND sha256 = ?",
+                (document["work_date"], document["sha256"]),
+            ).fetchone()
+        return int(row["id"])
+
+    def finish_schedule_document(
+        self,
+        document_id: int,
+        *,
+        status: str,
+        error: str = "",
+        page_count: int = 0,
+        extracted_chars: int = 0,
+        imported_rows: int = 0,
+        rejected_rows: int = 0,
+    ) -> None:
+        with self.connect() as conn:
+            conn.execute(
+                """
+                UPDATE schedule_documents
+                SET status = ?, error_summary = ?, page_count = ?, extracted_chars = ?,
+                    imported_rows = ?, rejected_rows = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    status,
+                    str(error or "")[:500],
+                    page_count,
+                    extracted_chars,
+                    imported_rows,
+                    rejected_rows,
+                    utc_now(),
+                    document_id,
+                ),
+            )
+
+    def replace_daily_pdf_schedules(
+        self,
+        document_id: int,
+        work_date: str,
+        rows: list[dict[str, Any]],
+    ) -> dict[str, int]:
+        now = utc_now()
+        inserted = 0
+        kept = 0
+        active_keys = {str(row["source_key"]) for row in rows}
+        with self.connect() as conn:
+            existing_rows = conn.execute(
+                """
+                SELECT id, source_key, is_active
+                FROM work_schedules
+                WHERE work_date = ? AND source_type = 'daily_pdf'
+                """,
+                (work_date,),
+            ).fetchall()
+            existing_by_key = {str(row["source_key"]): row for row in existing_rows if row["source_key"]}
+            for row in rows:
+                existing = existing_by_key.get(str(row["source_key"]))
+                if existing:
+                    conn.execute(
+                        """
+                        UPDATE work_schedules
+                        SET shift = ?, staff_name = ?, site = ?, task_text = ?, source_file = ?,
+                            ocr_confidence = ?, review_status = ?, source_document_id = ?, is_active = 1
+                        WHERE id = ?
+                        """,
+                        (
+                            row.get("shift"),
+                            row["staff_name"],
+                            row.get("site"),
+                            row["task_text"],
+                            row.get("source_file"),
+                            row.get("ocr_confidence"),
+                            row.get("review_status", "confirmed"),
+                            document_id,
+                            existing["id"],
+                        ),
+                    )
+                    kept += 1
+                    continue
+                conn.execute(
+                    """
+                    INSERT INTO work_schedules (
+                        work_date, shift, staff_name, site, task_text, source_file,
+                        ocr_confidence, review_status, source_document_id, source_type,
+                        source_key, is_active, created_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'daily_pdf', ?, 1, ?)
+                    """,
+                    (
+                        work_date,
+                        row.get("shift"),
+                        row["staff_name"],
+                        row.get("site"),
+                        row["task_text"],
+                        row.get("source_file"),
+                        row.get("ocr_confidence"),
+                        row.get("review_status", "confirmed"),
+                        document_id,
+                        row["source_key"],
+                        now,
+                    ),
+                )
+                inserted += 1
+            stale_ids = [
+                int(row["id"])
+                for row in existing_rows
+                if str(row["source_key"] or "") not in active_keys and bool(row["is_active"])
+            ]
+            if stale_ids:
+                placeholders = ",".join("?" for _ in stale_ids)
+                conn.execute(
+                    f"UPDATE work_schedules SET is_active = 0 WHERE id IN ({placeholders})",
+                    tuple(stale_ids),
+                )
+                payload = dumps({"reason": "schedule_replaced", "work_date": work_date})
+                conn.execute(
+                    f"""
+                    UPDATE reminders
+                    SET status = 'skipped', resolved_at = ?, result_payload_json = ?
+                    WHERE status = 'pending'
+                      AND repair_record_id IN (
+                          SELECT id FROM repair_records
+                          WHERE work_schedule_id IN ({placeholders})
+                      )
+                    """,
+                    (now, payload, *stale_ids),
+                )
+            conn.execute(
+                """
+                UPDATE schedule_documents
+                SET status = 'superseded', updated_at = ?
+                WHERE work_date = ? AND id != ? AND status = 'imported'
+                """,
+                (now, work_date, document_id),
+            )
+        return {"inserted": inserted, "kept": kept, "deactivated": len(stale_ids)}
+
     def insert_schedule_rows(self, rows: list[dict[str, Any]]) -> dict[str, int]:
         now = utc_now()
         inserted = 0
         skipped = 0
+        normalized_rows = [
+            {**row, "site": self.resolve_site_name(str(row.get("site") or ""))}
+            for row in rows
+        ]
         with self.connect() as conn:
-            for row in rows:
+            for row in normalized_rows:
                 existing = conn.execute(
                     """
                     SELECT id FROM work_schedules
@@ -1375,6 +1604,7 @@ class Database:
         return {"inserted": inserted, "skipped": skipped}
 
     def find_schedule_row(self, row: dict[str, Any]) -> dict[str, Any] | None:
+        site = self.resolve_site_name(str(row.get("site") or ""))
         with self.connect() as conn:
             found = conn.execute(
                 """
@@ -1390,7 +1620,7 @@ class Database:
                 (
                     row["work_date"],
                     row["staff_name"],
-                    row.get("site"),
+                    site,
                     row["task_text"],
                     row.get("source_file"),
                 ),
@@ -1405,6 +1635,7 @@ class Database:
                 """
                 SELECT * FROM work_schedules
                 WHERE work_date = ?
+                  AND is_active = 1
                   AND (staff_name = ? OR staff_name LIKE ? OR ? LIKE '%' || staff_name || '%')
                 ORDER BY id ASC
                 LIMIT ?
@@ -1418,8 +1649,10 @@ class Database:
         work_date: str,
         limit: int = 100,
         site_names: list[str] | None = None,
+        include_daily_pdf: bool = True,
     ) -> list[dict[str, Any]]:
         site_filter = ""
+        source_filter = "" if include_daily_pdf else "AND ws.source_type != 'daily_pdf'"
         params: list[Any] = [work_date]
         if site_names:
             placeholders = ",".join("?" for _ in site_names)
@@ -1432,6 +1665,8 @@ class Database:
                 SELECT ws.*
                 FROM work_schedules ws
                 WHERE ws.work_date = ?
+                  AND ws.is_active = 1
+                  {source_filter}
                   {site_filter}
                   AND NOT EXISTS (
                     SELECT 1 FROM repair_records rr
@@ -1454,13 +1689,14 @@ class Database:
         if not work_date or not target_name:
             return None
         target = target_name.strip()
-        site_value = (site or "").strip()
+        site_value = self.resolve_site_name((site or "").strip())
         with self.connect() as conn:
             if site_value:
                 row = conn.execute(
                     """
                     SELECT * FROM work_schedules
                     WHERE work_date = ?
+                      AND is_active = 1
                       AND (staff_name = ? OR staff_name LIKE ? OR ? LIKE '%' || staff_name || '%')
                       AND COALESCE(site, '') = ?
                     ORDER BY id DESC
@@ -1474,6 +1710,7 @@ class Database:
                 """
                 SELECT * FROM work_schedules
                 WHERE work_date = ?
+                  AND is_active = 1
                   AND (staff_name = ? OR staff_name LIKE ? OR ? LIKE '%' || staff_name || '%')
                 ORDER BY id DESC
                 LIMIT 1
@@ -1484,6 +1721,7 @@ class Database:
 
     def save_issue_record(self, issue: dict[str, Any]) -> dict[str, Any]:
         now = utc_now()
+        site = self.resolve_site_name(str(issue.get("site") or ""))
         with self.connect() as conn:
             cur = conn.execute(
                 """
@@ -1498,7 +1736,7 @@ class Database:
                     issue.get("raw_message_id"),
                     issue["reported_by"],
                     issue.get("work_date"),
-                    issue.get("site"),
+                    site,
                     issue.get("issue_text", ""),
                     issue.get("issue_summary", ""),
                     issue.get("confidence"),
@@ -1544,6 +1782,7 @@ class Database:
         params: list[Any] = []
         site_filter = ""
         if site:
+            site = self.resolve_site_name(site)
             site_filter = "AND COALESCE(site, '') = ?"
             params.append(site)
         params.append(limit)
@@ -1575,6 +1814,7 @@ class Database:
 
     def convert_issue_to_schedule(self, issue_id: int, schedule: dict[str, Any], note: str = "") -> dict[str, Any]:
         now = utc_now()
+        site = self.resolve_site_name(str(schedule.get("site") or ""))
         with self.connect() as conn:
             issue = conn.execute(
                 "SELECT * FROM issue_records WHERE id = ?",
@@ -1600,7 +1840,7 @@ class Database:
                     schedule["work_date"],
                     schedule.get("shift"),
                     schedule["staff_name"],
-                    schedule.get("site"),
+                    site,
                     schedule["task_text"],
                     schedule.get("source_file", f"issue_record:{issue_id}"),
                     schedule.get("ocr_confidence", 0.9),
@@ -1658,6 +1898,7 @@ class Database:
 
     def save_task_event(self, event: dict[str, Any]) -> dict[str, Any]:
         now = utc_now()
+        site = self.resolve_site_name(str(event.get("site") or ""))
         with self.connect() as conn:
             cur = conn.execute(
                 """
@@ -1674,7 +1915,7 @@ class Database:
                     event["event_type"],
                     event["sender"],
                     event.get("target_name"),
-                    event.get("site"),
+                    site,
                     event.get("work_date"),
                     event.get("event_text", ""),
                     dumps(event.get("event_payload", {})),
@@ -1793,6 +2034,7 @@ class Database:
         item_index: int = 0,
     ) -> int:
         now = utc_now()
+        site = self.resolve_site_name(str(analysis.get("site") or ""))
         missing_items = analysis.get("missing_items", []) or []
         next_actions = analysis.get("next_actions", []) or []
         with self.connect() as conn:
@@ -1829,7 +2071,7 @@ class Database:
                     analysis.get("work_schedule_id"),
                     analysis.get("work_date"),
                     analysis.get("staff_name"),
-                    analysis.get("site"),
+                    site,
                     analysis.get("work_type"),
                     analysis.get("business_category", "维修"),
                     analysis.get("summary", ""),
@@ -2126,6 +2368,9 @@ class Database:
         feishu_record_id: str | None = None,
     ) -> int:
         now = utc_now()
+        site = self.resolve_site_name(
+            str(analysis.get("site") or schedule.get("site") or "")
+        )
         missing_items = analysis.get("missing_items", []) or []
         next_actions = analysis.get("next_actions", []) or []
         with self.connect() as conn:
@@ -2152,7 +2397,7 @@ class Database:
                     (
                         analysis.get("work_date"),
                         analysis.get("staff_name"),
-                        analysis.get("site"),
+                        site,
                         analysis.get("work_type"),
                         analysis.get("business_category", "维修"),
                         analysis.get("summary", ""),
@@ -2183,7 +2428,7 @@ class Database:
                     schedule["id"],
                     analysis.get("work_date"),
                     analysis.get("staff_name"),
-                    analysis.get("site"),
+                    site,
                     analysis.get("work_type"),
                     analysis.get("business_category", "维修"),
                     analysis.get("summary", ""),

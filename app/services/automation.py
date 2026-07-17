@@ -84,12 +84,16 @@ def _build_due_reminder_jobs(
     if reminder.days_of_week and weekday_code not in reminder.days_of_week:
         return []
     jobs: list[dict[str, Any]] = []
+    final_time = max(reminder.times) if reminder.times else ""
     for time_text in reminder.times:
         hour = int(time_text[:2])
         minute = int(time_text[3:])
         slot = current_local.replace(hour=hour, minute=minute, second=0, microsecond=0)
         if slot > current_local:
             continue
+        actions = ["run_followups", "send_reminders"]
+        if settings.daily_schedule_pdf.enabled and time_text == final_time:
+            actions.insert(0, "sync_daily_schedule_pdf")
         jobs.append(
             _job_payload(
                 settings,
@@ -97,7 +101,7 @@ def _build_due_reminder_jobs(
                 job_type=REMINDER_CYCLE,
                 scheduled_for=slot,
                 timezone_name=timezone_name,
-                actions=["run_followups", "send_reminders"],
+                actions=actions,
             )
         )
     return jobs

@@ -117,16 +117,23 @@ def match_schedule(message: dict[str, Any], schedules: list[dict[str, Any]]) -> 
     best: tuple[int, dict[str, Any]] | None = None
     for schedule in schedules:
         score = 0
+        staff_matched = False
+        work_matched = False
         staff = to_simplified_text(str(schedule.get("staff_name") or "")).lower()
         site = to_simplified_text(str(schedule.get("site") or ""))
         task_text = to_simplified_text(str(schedule.get("task_text") or ""))
         if staff and (staff == sender or staff in sender or sender in staff):
             score += 5
+            staff_matched = True
         if site and site in text:
             score += 4
+            work_matched = True
         for keyword in _keywords(task_text):
             if keyword in text:
                 score += 1
+                work_matched = True
+        if schedule.get("source_type") == "daily_pdf" and not (staff_matched and work_matched):
+            continue
         if score > 0 and (best is None or score > best[0]):
             best = (score, schedule)
     return best[1] if best else None
