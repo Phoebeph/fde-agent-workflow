@@ -4,7 +4,8 @@
     "use_current_logged_in_account": true,
     "global_scan_lock_enabled": true,
     "current_account_names": [
-      "管理员"
+      "管理员",
+      "Henry"
     ],
     "groups": [
       {
@@ -412,59 +413,61 @@
     },
     {
       "id": "site_lincoln_house",
-      "name": "林肯大廈",
+      "name": "Lincoln House",
       "aliases": [
-        "Lincoln House 林肯大廈",
+        "Lincoln House",
         "林肯大廈",
-        "Lincoln House"
+        "Lincoln House 林肯大廈"
       ],
       "enabled": true
     },
     {
       "id": "site_oxford_house",
-      "name": "濠豐大廈",
+      "name": "Oxford House",
       "aliases": [
-        "Oxford House 濠豐大廈",
+        "Oxford House",
         "濠豐大廈",
-        "Oxford House"
+        "Oxford House 濠豐大廈"
       ],
       "enabled": true
     },
     {
       "id": "site_festival_walk",
-      "name": "又一城",
+      "name": "Festival Walk",
       "aliases": [
-        "Festival Walk 又一城",
+        "Festival Walk",
         "又一城",
-        "Festival Walk"
+        "Festival Walk 又一城"
       ],
       "enabled": true
     },
     {
       "id": "site_lee_garden_five",
-      "name": "利園五期",
+      "name": "Lee Garden Five",
       "aliases": [
-        "Lee Garden Five 利園五期",
+        "Lee Garden Five",
         "利園五期",
-        "Lee Garden Five"
+        "LG5",
+        "Lee Garden Five 利園五期"
       ],
       "enabled": true
     },
     {
       "id": "site_lee_garden_six",
-      "name": "利園六期",
+      "name": "Lee Garden Six",
       "aliases": [
-        "Lee Garden Six 利園六期   LG6",
-        "利園六期",
         "Lee Garden Six",
-        "LG6"
+        "利園六期",
+        "LG6",
+        "Lee Garden Six 利園六期   LG6"
       ],
       "enabled": true
     },
     {
       "id": "site_8_qre_generali_tower",
-      "name": "8 QRE (Generali Tower)",
+      "name": "8 QRE",
       "aliases": [
+        "8 QRE",
         "8 QRE (Generali Tower)"
       ],
       "enabled": true
@@ -473,36 +476,38 @@
       "id": "site_five_pacific_place",
       "name": "Five Pacific Place",
       "aliases": [
-        "Five Pacific Place"
+        "Five Pacific Place",
+        "5PP"
       ],
       "enabled": true
     },
     {
       "id": "site_ubs_ag_credit_suisse",
-      "name": "UBS AG (Credit Suisse *)",
+      "name": "UBS AG",
       "aliases": [
+        "UBS AG",
         "UBS AG (Credit Suisse *)"
       ],
       "enabled": true
     },
     {
       "id": "site_lee_garden_two",
-      "name": "利園二期",
+      "name": "Lee Garden Two",
       "aliases": [
-        "Lee Garden Two 利園二期   LG2",
-        "利園二期",
         "Lee Garden Two",
-        "LG2"
+        "利園二期",
+        "LG2",
+        "Lee Garden Two 利園二期   LG2"
       ],
       "enabled": true
     },
     {
       "id": "site_the_grandiose",
-      "name": "君傲灣",
+      "name": "The Grandiose",
       "aliases": [
-        "The Grandiose 君傲灣",
+        "The Grandiose",
         "君傲灣",
-        "The Grandiose"
+        "The Grandiose 君傲灣"
       ],
       "enabled": true
     },
@@ -510,32 +515,36 @@
       "id": "site_midtown_soundwill_plaza_ii",
       "name": "Midtown - Soundwill Plaza II",
       "aliases": [
-        "Midtown - Soundwill Plaza II"
+        "Midtown - Soundwill Plaza II",
+        "Midtown",
+        "Soundwill Plaza"
       ],
       "enabled": true
     },
     {
       "id": "site_east_apartments",
-      "name": "東隅服務式公寓",
+      "name": "East Apartments",
       "aliases": [
-        "East Apartments 東隅服務式公寓",
+        "East Apartments",
         "東隅服務式公寓",
-        "East Apartments"
+        "East Apartments 東隅服務式公寓"
       ],
       "enabled": true
     },
     {
       "id": "site_atal_yau_tong_alarm_cctv",
-      "name": "ATAL (Yau Tong) Alarm & CCTV",
+      "name": "ATAL Yau Tong",
       "aliases": [
+        "ATAL Yau Tong",
         "ATAL (Yau Tong) Alarm & CCTV"
       ],
       "enabled": true
     },
     {
       "id": "site_aia_central_fin_light",
-      "name": "AIA Central (Fin-Light)",
+      "name": "AIA Central",
       "aliases": [
+        "AIA Central",
         "AIA Central (Fin-Light)"
       ],
       "enabled": true
@@ -550,11 +559,11 @@
     },
     {
       "id": "site_eagle_harbour_public_carpark",
-      "name": "鷹港公眾停車場",
+      "name": "Eagle Harbour Public Carpark",
       "aliases": [
-        "Eagle Harbour Public Carpark 鷹港公眾停車場",
+        "Eagle Harbour Public Carpark",
         "鷹港公眾停車場",
-        "Eagle Harbour Public Carpark"
+        "Eagle Harbour Public Carpark 鷹港公眾停車場"
       ],
       "enabled": true
     },
@@ -568,45 +577,49 @@
     },
     {
       "id": "site_td_tower",
-      "name": "電訊數碼大樓",
+      "name": "TD Tower",
       "aliases": [
-        "TD Tower 電訊數碼大樓",
+        "TD Tower",
         "電訊數碼大樓",
-        "TD Tower"
+        "TD Tower 電訊數碼大樓"
       ],
       "enabled": true
     },
     {
       "id": "site_the_forest_k28_skypark_led_tv_display_wall",
-      "name": "The Forest, K28 Skypark (LED TV Display Wall)",
+      "name": "The Forest",
       "aliases": [
+        "The Forest",
+        "K28 Skypark",
         "The Forest, K28 Skypark (LED TV Display Wall)"
       ],
       "enabled": true
     },
     {
       "id": "site_k11_atelier_h3_elv",
-      "name": "K11 Atelier H3 (ELV)",
+      "name": "K11 Atelier H3",
       "aliases": [
+        "K11 Atelier H3",
         "K11 Atelier H3 (ELV)"
       ],
       "enabled": true
     },
     {
       "id": "site_k11_atelier_h3_security_gate",
-      "name": "K11 Atelier H3 (Security Gate)",
+      "name": "K11 Atelier H3",
       "aliases": [
+        "K11 Atelier H3",
         "K11 Atelier H3 (Security Gate)"
       ],
       "enabled": true
     },
     {
       "id": "site_the_pavilia_bay",
-      "name": "柏傲灣",
+      "name": "The Pavilia Bay",
       "aliases": [
-        "The Pavilia Bay 柏傲灣",
+        "The Pavilia Bay",
         "柏傲灣",
-        "The Pavilia Bay"
+        "The Pavilia Bay 柏傲灣"
       ],
       "enabled": true
     },
@@ -620,22 +633,22 @@
     },
     {
       "id": "site_lee_garden_three",
-      "name": "利園三期",
+      "name": "Lee Garden Three",
       "aliases": [
-        "Lee Garden Three 利園三期 LG3",
-        "利園三期",
         "Lee Garden Three",
-        "LG3"
+        "利園三期",
+        "LG3",
+        "Lee Garden Three 利園三期 LG3"
       ],
       "enabled": true
     },
     {
       "id": "site_cullinan_west",
-      "name": "匯璽",
+      "name": "Cullinan West",
       "aliases": [
-        "Cullinan West 匯璽",
+        "Cullinan West",
         "匯璽",
-        "Cullinan West"
+        "Cullinan West 匯璽"
       ],
       "enabled": true
     },
@@ -643,14 +656,16 @@
       "id": "site_one_taikoo_place",
       "name": "One Taikoo Place",
       "aliases": [
-        "One Taikoo Place"
+        "One Taikoo Place",
+        "1TP"
       ],
       "enabled": true
     },
     {
       "id": "site_hong_kong_children_s_hospital_broadcast_reception",
-      "name": "Hong Kong Children's Hospital (Broadcast Reception)",
+      "name": "Hong Kong Children's Hospital",
       "aliases": [
+        "Hong Kong Children's Hospital",
         "Hong Kong Children's Hospital (Broadcast Reception)"
       ],
       "enabled": true
@@ -665,62 +680,70 @@
     },
     {
       "id": "site_lee_garden_three_fa_ade_podium_lighting",
-      "name": "Lee Garden Three (Façade & Podium Lighting)",
+      "name": "Lee Garden Three",
       "aliases": [
+        "Lee Garden Three",
+        "利園三期",
+        "LG3",
         "Lee Garden Three (Façade & Podium Lighting)"
       ],
       "enabled": true
     },
     {
       "id": "site_parc_city",
-      "name": "全城匯",
+      "name": "Parc City",
       "aliases": [
-        "Parc City 全城匯",
+        "Parc City",
         "全城匯",
-        "Parc City"
+        "Parc City 全城匯"
       ],
       "enabled": true
     },
     {
       "id": "site_the_capitol",
-      "name": "首都",
+      "name": "The Capitol",
       "aliases": [
-        "The Capitol 首都",
+        "The Capitol",
         "首都",
-        "The Capitol"
+        "The Capitol 首都"
       ],
       "enabled": true
     },
     {
       "id": "site_festival_walk_pa_cctv_smatv_cabd",
-      "name": "Festival Walk (PA, CCTV, SMATV/CABD)",
+      "name": "Festival Walk",
       "aliases": [
+        "Festival Walk",
+        "又一城",
         "Festival Walk (PA, CCTV, SMATV/CABD)"
       ],
       "enabled": true
     },
     {
       "id": "site_k11_musea_elv",
-      "name": "K11 Musea (ELV)",
+      "name": "K11 Musea",
       "aliases": [
+        "K11 Musea",
         "K11 Musea (ELV)"
       ],
       "enabled": true
     },
     {
       "id": "site_k11_musea_security_gate",
-      "name": "K11 Musea (Security Gate)",
+      "name": "K11 Musea",
       "aliases": [
+        "K11 Musea",
         "K11 Musea (Security Gate)"
       ],
       "enabled": true
     },
     {
       "id": "site_rosewood_hotel_k11_artus",
-      "name": "瑰麗酒店",
+      "name": "Rosewood Hotel",
       "aliases": [
-        "Rosewood Hotel 瑰麗酒店 & K11 Artus",
+        "Rosewood Hotel",
         "瑰麗酒店",
+        "Rosewood Hotel 瑰麗酒店 & K11 Artus",
         "Rosewood Hotel & K11 Artus"
       ],
       "enabled": true
@@ -743,11 +766,11 @@
     },
     {
       "id": "site_le_prestige",
-      "name": "領都",
+      "name": "Le Prestige",
       "aliases": [
-        "Le Prestige 領都",
+        "Le Prestige",
         "領都",
-        "Le Prestige"
+        "Le Prestige 領都"
       ],
       "enabled": true
     },
@@ -761,102 +784,112 @@
     },
     {
       "id": "site_hkbh",
-      "name": "浸會醫院",
+      "name": "HKBH",
       "aliases": [
-        "HKBH 浸會醫院",
+        "HKBH",
         "浸會醫院",
-        "HKBH"
+        "HKBH 浸會醫院"
       ],
       "enabled": true
     },
     {
       "id": "site_citylink_plaza_cctv",
-      "name": "連城廣場",
+      "name": "Citylink Plaza",
       "aliases": [
-        "Citylink Plaza (CCTV) 連城廣場",
+        "Citylink Plaza",
         "連城廣場",
+        "Citylink Plaza (CCTV) 連城廣場",
         "Citylink Plaza (CCTV)"
       ],
       "enabled": true
     },
     {
       "id": "site_city_point",
-      "name": "環宇海灣",
+      "name": "City Point",
       "aliases": [
-        "City Point 環宇海灣",
+        "City Point",
         "環宇海灣",
-        "City Point"
+        "City Point 環宇海灣"
       ],
       "enabled": true
     },
     {
       "id": "site_citywalk_led_wall",
-      "name": "Citywalk (LED Wall)",
+      "name": "Citywalk",
       "aliases": [
+        "Citywalk",
         "Citywalk (LED Wall)"
       ],
       "enabled": true
     },
     {
       "id": "site_the_entrance",
-      "name": "峻源",
+      "name": "The Entrance",
       "aliases": [
-        "The Entrance 峻源",
+        "The Entrance",
         "峻源",
-        "The Entrance"
+        "The Entrance 峻源"
       ],
       "enabled": true
     },
     {
       "id": "site_avenue_of_stars_salisbury_garden",
-      "name": "星光大道",
+      "name": "Avenue of Stars",
       "aliases": [
-        "Avenue of Stars 星光大道 & Salisbury Garden",
+        "Avenue of Stars",
         "星光大道",
+        "Avenue of Stars 星光大道 & Salisbury Garden",
         "Avenue of Stars & Salisbury Garden"
       ],
       "enabled": true
     },
     {
       "id": "site_festival_city",
-      "name": "名城",
+      "name": "Festival City",
       "aliases": [
-        "Festival City 名城",
+        "Festival City",
         "名城",
-        "Festival City"
+        "Festival City 名城"
       ],
       "enabled": true
     },
     {
       "id": "site_cdw_building_people_counting",
-      "name": "中染大廈",
+      "name": "CDW Building",
       "aliases": [
-        "CDW Building (中染大廈) People Counting",
+        "CDW Building",
         "中染大廈",
+        "CDW Building (中染大廈) People Counting",
         "CDW Building ( ) People Counting"
       ],
       "enabled": true
     },
     {
       "id": "site_the_hari_330_lockhart_road",
-      "name": "The Hari (330 Lockhart Road)",
+      "name": "The Hari",
       "aliases": [
+        "The Hari",
+        "330 Lockhart Road",
         "The Hari (330 Lockhart Road)"
       ],
       "enabled": true
     },
     {
       "id": "site_pacific_place_acs_at_lg1",
-      "name": "Pacific Place (ACS at LG1)",
+      "name": "Pacific Place",
       "aliases": [
+        "Pacific Place",
+        "PP",
         "Pacific Place (ACS at LG1)"
       ],
       "enabled": true
     },
     {
       "id": "site_pacific_place_cctv",
-      "name": "Pacific Place (CCTV)",
+      "name": "Pacific Place",
       "aliases": [
+        "Pacific Place",
+        "PP",
         "Pacific Place (CCTV)"
       ],
       "enabled": true
@@ -865,7 +898,9 @@
       "id": "site_telford_plaza_i_ii",
       "name": "Telford Plaza I & II",
       "aliases": [
-        "Telford Plaza I & II"
+        "Telford Plaza I & II",
+        "德福廣場",
+        "Telford Plaza"
       ],
       "enabled": true
     },
@@ -887,18 +922,20 @@
     },
     {
       "id": "site_maritime_square_i_ii",
-      "name": "青衣城",
+      "name": "Maritime Square",
       "aliases": [
-        "Maritime Square I & II 青衣城",
+        "Maritime Square",
         "青衣城",
+        "Maritime Square I & II 青衣城",
         "Maritime Square I & II"
       ],
       "enabled": true
     },
     {
       "id": "site_popcorn_1_2",
-      "name": "PopCorn 1 & 2",
+      "name": "PopCorn",
       "aliases": [
+        "PopCorn",
         "PopCorn 1 & 2"
       ],
       "enabled": true
@@ -921,238 +958,266 @@
     },
     {
       "id": "site_york_house_access_gates",
-      "name": "York House (Access Gates)",
+      "name": "York House",
       "aliases": [
+        "York House",
+        "約克大廈",
         "York House (Access Gates)"
       ],
       "enabled": true
     },
     {
       "id": "site_jardine_house_access_gates",
-      "name": "Jardine House (Access Gates)",
+      "name": "Jardine House",
       "aliases": [
+        "Jardine House",
+        "怡和大廈",
         "Jardine House (Access Gates)"
       ],
       "enabled": true
     },
     {
       "id": "site_lee_garden_one_cctv",
-      "name": "Lee Garden One (CCTV)",
+      "name": "Lee Garden One",
       "aliases": [
+        "Lee Garden One",
+        "LG1",
         "Lee Garden One (CCTV)"
       ],
       "enabled": true
     },
     {
       "id": "site_one_hysan_avenue_cctv",
-      "name": "One Hysan Avenue (CCTV)",
+      "name": "One Hysan Avenue",
       "aliases": [
+        "One Hysan Avenue",
         "One Hysan Avenue (CCTV)"
       ],
       "enabled": true
     },
     {
       "id": "site_hysan_place_cctv",
-      "name": "Hysan Place (CCTV)",
+      "name": "Hysan Place",
       "aliases": [
+        "Hysan Place",
         "Hysan Place (CCTV)"
       ],
       "enabled": true
     },
     {
       "id": "site_hkis_cctv",
-      "name": "大潭",
+      "name": "HKIS 大潭",
       "aliases": [
-        "HKIS 大潭 CCTV",
+        "HKIS 大潭",
         "大潭",
+        "HKIS 大潭 CCTV",
         "HKIS CCTV"
       ],
       "enabled": true
     },
     {
       "id": "site_hkis_cctv_2",
-      "name": "淺水灣",
+      "name": "HKIS 淺水灣",
       "aliases": [
-        "HKIS 淺水灣 CCTV",
+        "HKIS 淺水灣",
         "淺水灣",
+        "HKIS 淺水灣 CCTV",
         "HKIS CCTV"
       ],
       "enabled": true
     },
     {
       "id": "site_hkis_acs_cctv",
-      "name": "大潭",
+      "name": "HKIS 大潭",
       "aliases": [
-        "HKIS 大潭 ACS & CCTV",
+        "HKIS 大潭",
         "大潭",
+        "HKIS 大潭 ACS & CCTV",
         "HKIS ACS & CCTV"
       ],
       "enabled": true
     },
     {
       "id": "site_hkis_acs_cctv_2",
-      "name": "淺水灣",
+      "name": "HKIS 淺水灣",
       "aliases": [
-        "HKIS 淺水灣 ACS & CCTV",
+        "HKIS 淺水灣",
         "淺水灣",
+        "HKIS 淺水灣 ACS & CCTV",
         "HKIS ACS & CCTV"
       ],
       "enabled": true
     },
     {
       "id": "site_plaza_ascot_cctv",
-      "name": "駿景廣場",
+      "name": "Plaza Ascot",
       "aliases": [
-        "Plaza Ascot 駿景廣場 (CCTV)",
+        "Plaza Ascot",
         "駿景廣場",
+        "Plaza Ascot 駿景廣場 (CCTV)",
         "Plaza Ascot (CCTV)"
       ],
       "enabled": true
     },
     {
       "id": "site_ocean_walk_cctv",
-      "name": "海趣坊",
+      "name": "Ocean Walk",
       "aliases": [
-        "Ocean Walk 海趣坊 (CCTV)",
+        "Ocean Walk",
         "海趣坊",
+        "Ocean Walk 海趣坊 (CCTV)",
         "Ocean Walk (CCTV)"
       ],
       "enabled": true
     },
     {
       "id": "site_hanford_plaza_cctv",
-      "name": "恒福商場",
+      "name": "Hanford Plaza",
       "aliases": [
-        "Hanford Plaza 恒福商場 (CCTV)",
+        "Hanford Plaza",
         "恒福商場",
+        "Hanford Plaza 恒福商場 (CCTV)",
         "Hanford Plaza (CCTV)"
       ],
       "enabled": true
     },
     {
       "id": "site_stmc_cctv",
-      "name": "新屯門中心",
+      "name": "STMC",
       "aliases": [
-        "STMC 新屯門中心 (CCTV)",
+        "STMC",
         "新屯門中心",
+        "STMC 新屯門中心 (CCTV)",
         "STMC (CCTV)"
       ],
       "enabled": true
     },
     {
       "id": "site_gloucester_tower_smatv",
-      "name": "告羅士打大廈",
+      "name": "Gloucester Tower",
       "aliases": [
-        "Gloucester Tower 告羅士打大廈 (SMATV*)",
+        "Gloucester Tower",
         "告羅士打大廈",
+        "Gloucester Tower 告羅士打大廈 (SMATV*)",
         "Gloucester Tower (SMATV*)"
       ],
       "enabled": true
     },
     {
       "id": "site_edinburgh_tower_smatv",
-      "name": "公爵大廈",
+      "name": "Edinburgh Tower",
       "aliases": [
-        "Edinburgh Tower 公爵大廈 (SMATV*)",
+        "Edinburgh Tower",
         "公爵大廈",
+        "Edinburgh Tower 公爵大廈 (SMATV*)",
         "Edinburgh Tower (SMATV*)"
       ],
       "enabled": true
     },
     {
       "id": "site_york_house_smatv",
-      "name": "約克大廈",
+      "name": "York House",
       "aliases": [
-        "York House 約克大廈 (SMATV)",
+        "York House",
         "約克大廈",
+        "York House 約克大廈 (SMATV)",
         "York House (SMATV)"
       ],
       "enabled": true
     },
     {
       "id": "site_alexandra_house_smatv",
-      "name": "歷山大廈",
+      "name": "Alexandra House",
       "aliases": [
-        "Alexandra House 歷山大廈 (SMATV*)",
+        "Alexandra House",
         "歷山大廈",
+        "Alexandra House 歷山大廈 (SMATV*)",
         "Alexandra House (SMATV*)"
       ],
       "enabled": true
     },
     {
       "id": "site_prince_s_building_smatv",
-      "name": "太子大廈",
+      "name": "Prince's Building",
       "aliases": [
-        "Prince's Building 太子大廈 (SMATV*)",
+        "Prince's Building",
         "太子大廈",
+        "Prince's Building 太子大廈 (SMATV*)",
         "Prince's Building (SMATV*)"
       ],
       "enabled": true
     },
     {
       "id": "site_chater_house_smatv",
-      "name": "遮打大廈",
+      "name": "Chater House",
       "aliases": [
-        "Chater House 遮打大廈 (SMATV*)",
+        "Chater House",
         "遮打大廈",
+        "Chater House 遮打大廈 (SMATV*)",
         "Chater House (SMATV*)"
       ],
       "enabled": true
     },
     {
       "id": "site_jardine_house_smatv",
-      "name": "怡和大廈",
+      "name": "Jardine House",
       "aliases": [
-        "Jardine House 怡和大廈 (SMATV*)",
+        "Jardine House",
         "怡和大廈",
+        "Jardine House 怡和大廈 (SMATV*)",
         "Jardine House (SMATV*)"
       ],
       "enabled": true
     },
     {
       "id": "site_exchange_square_smatv",
-      "name": "交易廣場",
+      "name": "Exchange Square",
       "aliases": [
-        "Exchange Square 交易廣場 (SMATV*)",
+        "Exchange Square",
         "交易廣場",
+        "Exchange Square 交易廣場 (SMATV*)",
         "Exchange Square (SMATV*)"
       ],
       "enabled": true
     },
     {
       "id": "site_the_forum_smatv",
-      "name": "富臨閣",
+      "name": "The Forum",
       "aliases": [
-        "The Forum 富臨閣 (SMATV*)",
+        "The Forum",
         "富臨閣",
+        "The Forum 富臨閣 (SMATV*)",
         "The Forum (SMATV*)"
       ],
       "enabled": true
     },
     {
       "id": "site_the_upper_house_cabd",
-      "name": "The Upper House (CABD)",
+      "name": "The Upper House",
       "aliases": [
+        "The Upper House",
         "The Upper House (CABD)"
       ],
       "enabled": true
     },
     {
       "id": "site_luk_yeung_galleria_cctv",
-      "name": "綠楊坊",
+      "name": "Luk Yeung Galleria",
       "aliases": [
-        "Luk Yeung Galleria 綠楊坊 (CCTV)",
+        "Luk Yeung Galleria",
         "綠楊坊",
+        "Luk Yeung Galleria 綠楊坊 (CCTV)",
         "Luk Yeung Galleria (CCTV)"
       ],
       "enabled": true
     },
     {
       "id": "site_paradise_mall_cctv",
-      "name": "杏花新城",
+      "name": "Paradise Mall",
       "aliases": [
-        "Paradise Mall 杏花新城 (CCTV)",
+        "Paradise Mall",
         "杏花新城",
+        "Paradise Mall 杏花新城 (CCTV)",
         "Paradise Mall (CCTV)"
       ],
       "enabled": true
@@ -1175,45 +1240,50 @@
     },
     {
       "id": "site_stmc_elv",
-      "name": "新屯門中心",
+      "name": "STMC",
       "aliases": [
-        "STMC 新屯門中心 (ELV)",
+        "STMC",
         "新屯門中心",
+        "STMC 新屯門中心 (ELV)",
         "STMC (ELV)"
       ],
       "enabled": true
     },
     {
       "id": "site_lee_garden_two_30_f_31_f_gallagher",
-      "name": "Lee Garden Two (30/F 31/F Gallagher)",
+      "name": "Lee Garden Two",
       "aliases": [
+        "Lee Garden Two",
+        "利園二期",
+        "LG2",
         "Lee Garden Two (30/F 31/F Gallagher)"
       ],
       "enabled": true
     },
     {
       "id": "site_metro_town",
-      "name": "都會駅",
+      "name": "Metro Town",
       "aliases": [
-        "Metro Town (都會駅)",
+        "Metro Town",
         "都會駅",
+        "Metro Town (都會駅)",
         "Metro Town ( )"
       ],
       "enabled": true
     },
     {
       "id": "site_elements",
-      "name": "圓方",
+      "name": "Elements",
       "aliases": [
-        "Elements 圓方",
+        "Elements",
         "圓方",
-        "Elements"
+        "Elements 圓方"
       ],
       "enabled": true
     },
     {
       "id": "site_iclub",
-      "name": "富薈上環酒店",
+      "name": "iclub 富薈上環酒店",
       "aliases": [
         "iclub 富薈上環酒店",
         "富薈上環酒店",
@@ -1223,7 +1293,7 @@
     },
     {
       "id": "site_iclub_2",
-      "name": "富薈尚乘上環酒店",
+      "name": "iclub 富薈尚乘上環酒店",
       "aliases": [
         "iclub 富薈尚乘上環酒店",
         "富薈尚乘上環酒店",
@@ -1233,7 +1303,7 @@
     },
     {
       "id": "site_iclub_3",
-      "name": "富薈炮台山酒店",
+      "name": "iclub 富薈炮台山酒店",
       "aliases": [
         "iclub 富薈炮台山酒店",
         "富薈炮台山酒店",
@@ -1243,7 +1313,7 @@
     },
     {
       "id": "site_iclub_4",
-      "name": "富薈土瓜灣酒店",
+      "name": "iclub 富薈土瓜灣酒店",
       "aliases": [
         "iclub 富薈土瓜灣酒店",
         "富薈土瓜灣酒店",
@@ -1253,7 +1323,7 @@
     },
     {
       "id": "site_iclub_5",
-      "name": "富薈旺角酒店",
+      "name": "iclub 富薈旺角酒店",
       "aliases": [
         "iclub 富薈旺角酒店",
         "富薈旺角酒店",
@@ -1273,37 +1343,38 @@
       "id": "site_two_taikoo_place",
       "name": "Two Taikoo Place",
       "aliases": [
-        "Two Taikoo Place"
+        "Two Taikoo Place",
+        "2TP"
       ],
       "enabled": true
     },
     {
       "id": "site_sheraton_hong_kong_tung_chung_hotel",
-      "name": "東涌喜來登酒店",
+      "name": "Sheraton Hong Kong Tung Chung Hotel",
       "aliases": [
-        "Sheraton Hong Kong Tung Chung Hotel 東涌喜來登酒店",
+        "Sheraton Hong Kong Tung Chung Hotel",
         "東涌喜來登酒店",
-        "Sheraton Hong Kong Tung Chung Hotel"
+        "Sheraton Hong Kong Tung Chung Hotel 東涌喜來登酒店"
       ],
       "enabled": true
     },
     {
       "id": "site_k11_atelier_king_s_road",
-      "name": "英皇道",
+      "name": "K11 Atelier King's Road",
       "aliases": [
-        "K11 Atelier King's Road 英皇道",
+        "K11 Atelier King's Road",
         "英皇道",
-        "K11 Atelier King's Road"
+        "K11 Atelier King's Road 英皇道"
       ],
       "enabled": true
     },
     {
       "id": "site_villa_lucca",
-      "name": "林海山城",
+      "name": "Villa Lucca",
       "aliases": [
-        "Villa Lucca 林海山城",
+        "Villa Lucca",
         "林海山城",
-        "Villa Lucca"
+        "Villa Lucca 林海山城"
       ],
       "enabled": true
     },
@@ -1341,101 +1412,107 @@
     },
     {
       "id": "site_hemera",
-      "name": "緻藍天",
+      "name": "Hemera",
       "aliases": [
-        "Hemera 緻藍天",
+        "Hemera",
         "緻藍天",
-        "Hemera"
+        "Hemera 緻藍天"
       ],
       "enabled": true
     },
     {
       "id": "site_greenview_villa",
-      "name": "綠悠雅苑",
+      "name": "Greenview Villa",
       "aliases": [
-        "Greenview Villa 綠悠雅苑",
+        "Greenview Villa",
         "綠悠雅苑",
-        "Greenview Villa"
+        "Greenview Villa 綠悠雅苑"
       ],
       "enabled": true
     },
     {
       "id": "site_malibu_5",
-      "name": "日出康城 期",
+      "name": "MALIBU",
       "aliases": [
-        "MALIBU 日出康城5期",
+        "MALIBU",
+        "日出康城5期",
         "日出康城 期",
+        "MALIBU 日出康城5期",
         "MALIBU 5"
       ],
       "enabled": true
     },
     {
       "id": "site_la_marina",
-      "name": "揚海",
+      "name": "La Marina",
       "aliases": [
-        "La Marina 揚海",
+        "La Marina",
         "揚海",
-        "La Marina"
+        "La Marina 揚海"
       ],
       "enabled": true
     },
     {
       "id": "site_sol_city",
-      "name": "朗城滙",
+      "name": "Sol City",
       "aliases": [
-        "Sol City 朗城滙",
+        "Sol City",
         "朗城滙",
-        "Sol City"
+        "Sol City 朗城滙"
       ],
       "enabled": true
     },
     {
       "id": "site_the_wai_elv",
-      "name": "圍方",
+      "name": "The Wai",
       "aliases": [
-        "The Wai 圍方 (ELV)",
+        "The Wai",
         "圍方",
+        "The Wai 圍方 (ELV)",
         "The Wai (ELV)"
       ],
       "enabled": true
     },
     {
       "id": "site_lohas_park",
-      "name": "日出公園",
+      "name": "Lohas Park",
       "aliases": [
-        "Lohas Park 日出公園",
+        "Lohas Park",
         "日出公園",
-        "Lohas Park"
+        "Lohas Park 日出公園"
       ],
       "enabled": true
     },
     {
       "id": "site_luk_yeung_sun_chuen",
-      "name": "綠楊新邨",
+      "name": "Luk Yeung Sun Chuen",
       "aliases": [
-        "Luk Yeung Sun Chuen 綠楊新邨",
+        "Luk Yeung Sun Chuen",
         "綠楊新邨",
-        "Luk Yeung Sun Chuen"
+        "Luk Yeung Sun Chuen 綠楊新邨"
       ],
       "enabled": true
     },
     {
       "id": "site_8_clear_water_bay_road_8",
-      "name": "清水灣道 號",
+      "name": "8 Clear Water Bay Road",
       "aliases": [
-        "8 Clear Water Bay Road 清水灣道8號",
+        "8 Clear Water Bay Road",
+        "清水灣道8號",
         "清水灣道 號",
+        "8 Clear Water Bay Road 清水灣道8號",
         "8 Clear Water Bay Road 8"
       ],
       "enabled": true
     },
     {
       "id": "site_five_pacific_place_turnstile",
-      "name": "Five Pacific Place Turnstile 5PP",
+      "name": "Five Pacific Place",
       "aliases": [
+        "Five Pacific Place",
+        "5PP",
         "Five Pacific Place Turnstile 5PP",
-        "Five Pacific Place Turnstile",
-        "5PP"
+        "Five Pacific Place Turnstile"
       ],
       "enabled": true
     },
@@ -1449,159 +1526,173 @@
     },
     {
       "id": "site_central_park_park_avenue",
-      "name": "帝柏海灣 柏景灣",
+      "name": "Central Park & Park Avenue",
       "aliases": [
-        "Central Park & Park Avenue 帝柏海灣 & 柏景灣",
+        "Central Park & Park Avenue",
+        "帝柏海灣",
+        "柏景灣",
         "帝柏海灣 柏景灣",
-        "Central Park & Park Avenue"
+        "Central Park & Park Avenue 帝柏海灣 & 柏景灣"
       ],
       "enabled": true
     },
     {
       "id": "site_island_harbourview",
-      "name": "維港灣",
+      "name": "Island Harbourview",
       "aliases": [
-        "Island Harbourview 維港灣",
+        "Island Harbourview",
         "維港灣",
-        "Island Harbourview"
+        "Island Harbourview 維港灣"
       ],
       "enabled": true
     },
     {
       "id": "site_harbour_green",
-      "name": "君匯港",
+      "name": "Harbour Green",
       "aliases": [
-        "Harbour Green 君匯港",
+        "Harbour Green",
         "君匯港",
-        "Harbour Green"
+        "Harbour Green 君匯港"
       ],
       "enabled": true
     },
     {
       "id": "site_the_upper_house_cctv",
-      "name": "The Upper House CCTV",
+      "name": "The Upper House",
       "aliases": [
+        "The Upper House",
         "The Upper House CCTV"
       ],
       "enabled": true
     },
     {
       "id": "site_united_christian_hospital",
-      "name": "聯合醫院",
+      "name": "United Christian Hospital",
       "aliases": [
-        "United Christian Hospital 聯合醫院",
+        "United Christian Hospital",
         "聯合醫院",
-        "United Christian Hospital"
+        "United Christian Hospital 聯合醫院"
       ],
       "enabled": true
     },
     {
       "id": "site_choi_hung_carpark_ad_hoc",
-      "name": "彩虹車場",
+      "name": "Choi Hung Carpark",
       "aliases": [
-        "Choi Hung Carpark 彩虹車場 (Ad-hoc)",
+        "Choi Hung Carpark",
         "彩虹車場",
+        "Choi Hung Carpark 彩虹車場 (Ad-hoc)",
         "Choi Hung Carpark (Ad-hoc)"
       ],
       "enabled": true
     },
     {
       "id": "site_hunghom_carpark_ad_hoc",
-      "name": "紅磡車場",
+      "name": "HungHom Carpark",
       "aliases": [
-        "HungHom Carpark 紅磡車場 (Ad-hoc)",
+        "HungHom Carpark",
         "紅磡車場",
+        "HungHom Carpark 紅磡車場 (Ad-hoc)",
         "HungHom Carpark (Ad-hoc)"
       ],
       "enabled": true
     },
     {
       "id": "site_trackside_villas_ad_hoc",
-      "name": "策誠軒",
+      "name": "Trackside Villas",
       "aliases": [
-        "Trackside Villas 策誠軒 (Ad-hoc)",
+        "Trackside Villas",
         "策誠軒",
+        "Trackside Villas 策誠軒 (Ad-hoc)",
         "Trackside Villas (Ad-hoc)"
       ],
       "enabled": true
     },
     {
       "id": "site_the_riverpark_8_ad_hoc",
-      "name": "溱岸 號",
+      "name": "The Riverpark",
       "aliases": [
-        "The Riverpark 溱岸8號 (Ad-hoc)",
+        "The Riverpark",
+        "溱岸8號",
         "溱岸 號",
+        "The Riverpark 溱岸8號 (Ad-hoc)",
         "The Riverpark 8 (Ad-hoc)"
       ],
       "enabled": true
     },
     {
       "id": "site_plaza_ascot_elv_ad_hoc",
-      "name": "駿景廣場",
+      "name": "Plaza Ascot",
       "aliases": [
-        "Plaza Ascot 駿景廣場 (ELV) (Ad-hoc)",
+        "Plaza Ascot",
         "駿景廣場",
+        "Plaza Ascot 駿景廣場 (ELV) (Ad-hoc)",
         "Plaza Ascot (ELV) (Ad-hoc)"
       ],
       "enabled": true
     },
     {
       "id": "site_hanford_plaza_elv_ad_hoc",
-      "name": "恒福商場",
+      "name": "Hanford Plaza",
       "aliases": [
-        "Hanford Plaza 恒福商場 (ELV) (ad-hoc)",
+        "Hanford Plaza",
         "恒福商場",
+        "Hanford Plaza 恒福商場 (ELV) (ad-hoc)",
         "Hanford Plaza (ELV) (ad-hoc)"
       ],
       "enabled": true
     },
     {
       "id": "site_luk_yeung_galleria_elv",
-      "name": "綠楊坊",
+      "name": "Luk Yeung Galleria",
       "aliases": [
-        "Luk Yeung Galleria 綠楊坊 ELV",
+        "Luk Yeung Galleria",
         "綠楊坊",
+        "Luk Yeung Galleria 綠楊坊 ELV",
         "Luk Yeung Galleria ELV"
       ],
       "enabled": true
     },
     {
       "id": "site_ocean_walk_elv",
-      "name": "海趣坊",
+      "name": "Ocean Walk",
       "aliases": [
-        "Ocean Walk 海趣坊 ELV",
+        "Ocean Walk",
         "海趣坊",
+        "Ocean Walk 海趣坊 ELV",
         "Ocean Walk ELV"
       ],
       "enabled": true
     },
     {
       "id": "site_paradise_mall_elv",
-      "name": "杏花新城",
+      "name": "Paradise Mall",
       "aliases": [
-        "Paradise Mall 杏花新城 ELV",
+        "Paradise Mall",
         "杏花新城",
+        "Paradise Mall 杏花新城 ELV",
         "Paradise Mall ELV"
       ],
       "enabled": true
     },
     {
       "id": "site_citylink_plaza_elv",
-      "name": "連城廣場",
+      "name": "Citylink Plaza",
       "aliases": [
-        "Citylink Plaza 連城廣場 ELV",
+        "Citylink Plaza",
         "連城廣場",
+        "Citylink Plaza 連城廣場 ELV",
         "Citylink Plaza ELV"
       ],
       "enabled": true
     },
     {
       "id": "site_montego_bay",
-      "name": "蔚藍東岸",
+      "name": "Montego Bay",
       "aliases": [
-        "Montego Bay 蔚藍東岸",
+        "Montego Bay",
         "蔚藍東岸",
-        "Montego Bay"
+        "Montego Bay 蔚藍東岸"
       ],
       "enabled": true
     },
@@ -1615,94 +1706,106 @@
     },
     {
       "id": "site_the_southside_parking_guiding_system_pgs_ad_hoc",
-      "name": "The Southside Parking Guiding System PGS Ad-hoc",
+      "name": "The Southside",
       "aliases": [
+        "The Southside",
         "The Southside Parking Guiding System PGS Ad-hoc"
       ],
       "enabled": true
     },
     {
       "id": "site_elements_parking_guiding_system_pgs_ad_hoc",
-      "name": "圓方",
+      "name": "Elements",
       "aliases": [
-        "Elements Parking Guiding System PGS (圓方) Ad-hoc",
+        "Elements",
         "圓方",
+        "Elements Parking Guiding System PGS (圓方) Ad-hoc",
         "Elements Parking Guiding System PGS ( ) Ad-hoc"
       ],
       "enabled": true
     },
     {
       "id": "site_jardine_house_turnstile_vms",
-      "name": "怡和大廈",
+      "name": "Jardine House",
       "aliases": [
-        "Jardine House 怡和大廈 (Turnstile VMS)",
+        "Jardine House",
         "怡和大廈",
+        "Jardine House 怡和大廈 (Turnstile VMS)",
         "Jardine House (Turnstile VMS)"
       ],
       "enabled": true
     },
     {
       "id": "site_chater_house_turnstile_vms",
-      "name": "遮打大廈",
+      "name": "Chater House",
       "aliases": [
-        "Chater House 遮打大廈 (Turnstile VMS)",
+        "Chater House",
         "遮打大廈",
+        "Chater House 遮打大廈 (Turnstile VMS)",
         "Chater House (Turnstile VMS)"
       ],
       "enabled": true
     },
     {
       "id": "site_alexandra_house_turnstile_vms",
-      "name": "歷山大廈",
+      "name": "Alexandra House",
       "aliases": [
-        "Alexandra House 歷山大廈 (Turnstile VMS)",
+        "Alexandra House",
         "歷山大廈",
+        "Alexandra House 歷山大廈 (Turnstile VMS)",
         "Alexandra House (Turnstile VMS)"
       ],
       "enabled": true
     },
     {
       "id": "site_york_house_turnstile_vms",
-      "name": "約克大廈",
+      "name": "York House",
       "aliases": [
-        "York House 約克大廈 (Turnstile VMS)",
+        "York House",
         "約克大廈",
+        "York House 約克大廈 (Turnstile VMS)",
         "York House (Turnstile VMS)"
       ],
       "enabled": true
     },
     {
       "id": "site_seaview_crescent",
-      "name": "海堤灣畔",
+      "name": "Seaview Crescent",
       "aliases": [
-        "Seaview Crescent 海堤灣畔",
+        "Seaview Crescent",
         "海堤灣畔",
-        "Seaview Crescent"
+        "Seaview Crescent 海堤灣畔"
       ],
       "enabled": true
     },
     {
       "id": "site_six_pacific_place_pv",
-      "name": "Six Pacific Place PV",
+      "name": "Six Pacific Place",
       "aliases": [
+        "Six Pacific Place",
+        "6PP",
         "Six Pacific Place PV"
       ],
       "enabled": true
     },
     {
       "id": "site_six_pacific_place_elv",
-      "name": "Six Pacific Place ELV",
+      "name": "Six Pacific Place",
       "aliases": [
+        "Six Pacific Place",
+        "6PP",
         "Six Pacific Place ELV"
       ],
       "enabled": true
     },
     {
       "id": "site_83_king_lam_street_83",
-      "name": "瓊林街 號",
+      "name": "83 King Lam Street",
       "aliases": [
-        "83 King Lam Street 瓊林街83號",
+        "83 King Lam Street",
+        "瓊林街83號",
         "瓊林街 號",
+        "83 King Lam Street 瓊林街83號",
         "83 King Lam Street 83"
       ],
       "enabled": true
@@ -1741,11 +1844,11 @@
     },
     {
       "id": "site_ontolo",
-      "name": "朗濤",
+      "name": "Ontolo",
       "aliases": [
-        "Ontolo 朗濤",
+        "Ontolo",
         "朗濤",
-        "Ontolo"
+        "Ontolo 朗濤"
       ],
       "enabled": true
     },
@@ -1759,39 +1862,41 @@
     },
     {
       "id": "site_hsbc_skm",
-      "name": "石門",
+      "name": "HSBC SKM",
       "aliases": [
-        "HSBC SKM 石門",
+        "HSBC SKM",
         "石門",
-        "HSBC SKM"
+        "HSBC SKM 石門"
       ],
       "enabled": true
     },
     {
       "id": "site_three_pacific_place_sg_turnstile",
-      "name": "Three Pacific Place SG (Turnstile)",
+      "name": "Three Pacific Place",
       "aliases": [
+        "Three Pacific Place",
+        "3PP",
         "Three Pacific Place SG (Turnstile)"
       ],
       "enabled": true
     },
     {
       "id": "site_the_palazzo",
-      "name": "御龍山",
+      "name": "The Palazzo",
       "aliases": [
-        "The Palazzo 御龍山",
+        "The Palazzo",
         "御龍山",
-        "The Palazzo"
+        "The Palazzo 御龍山"
       ],
       "enabled": true
     },
     {
       "id": "site_in_one",
-      "name": "瑜一",
+      "name": "In One",
       "aliases": [
-        "In One 瑜一",
+        "In One",
         "瑜一",
-        "In One"
+        "In One 瑜一"
       ],
       "enabled": true
     },
@@ -1805,31 +1910,31 @@
     },
     {
       "id": "site_the_harbourside",
-      "name": "君臨天下",
+      "name": "The Harbourside",
       "aliases": [
-        "The Harbourside 君臨天下",
+        "The Harbourside",
         "君臨天下",
-        "The Harbourside"
+        "The Harbourside 君臨天下"
       ],
       "enabled": true
     },
     {
       "id": "site_the_waterfront",
-      "name": "漾日居",
+      "name": "The Waterfront",
       "aliases": [
-        "The Waterfront 漾日居",
+        "The Waterfront",
         "漾日居",
-        "The Waterfront"
+        "The Waterfront 漾日居"
       ],
       "enabled": true
     },
     {
       "id": "site_sorrento",
-      "name": "擎天半島",
+      "name": "Sorrento",
       "aliases": [
-        "Sorrento 擎天半島",
+        "Sorrento",
         "擎天半島",
-        "Sorrento"
+        "Sorrento 擎天半島"
       ],
       "enabled": true
     },

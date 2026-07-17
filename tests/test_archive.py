@@ -57,8 +57,9 @@ class ArchiveTests(unittest.TestCase):
             )
 
             target = Path(mirrored.archive_path)
-            self.assertEqual(target.parts[-7:], ("地点A", "2026", "07", "17", "维修", "图片", "source.jpg"))
+            self.assertEqual(target.parts[-8:], ("by_site", "地点A", "2026", "07", "17", "维修", "图片", "source.jpg"))
             self.assertEqual(target.read_bytes(), b"image")
+            self.assertFalse((root / "data" / "地点A").exists())
 
 
 if __name__ == "__main__":

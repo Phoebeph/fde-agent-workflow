@@ -176,7 +176,7 @@ GET http://127.0.0.1:8000/api/whatsapp/download-jobs?limit=50
 
 每个任务会包含 `message_fingerprint`、`external_message_id`、发送人、时间、正文、附件提示等信息。影刀按这些信息回到 WhatsApp Web 找到对应消息。
 
-后端只会在消息已经完成 AI 分析后才返回附件下载任务。附件会继续归档到原有 `DATA_ROOT\年\月\日\地点\`，同时复制到 `DATA_ROOT\地点\年\月\日\维修或报价\`。多地点任务回传时必须附带 `repair_record_id` 或规范地点；默认影刀脚本会跳过需人工选择的多地点附件，不会自动使用第一条记录。日期优先使用 WhatsApp 消息发送日期。
+后端只会在消息已经完成 AI 分析后才返回附件下载任务。附件会继续归档到原有 `DATA_ROOT\年\月\日\地点\`，同时复制到 `DATA_ROOT\by_site\地点\年\月\日\维修或报价\`。多地点任务回传时必须附带 `repair_record_id` 或规范地点；默认影刀脚本会跳过需人工选择的多地点附件，不会自动使用第一条记录。日期优先使用 WhatsApp 消息发送日期。
 
 ### 下载和回传
 

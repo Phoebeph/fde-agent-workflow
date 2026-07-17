@@ -10,6 +10,15 @@ REPAIR_CATEGORY = "维修"
 QUOTATION_CATEGORY = "报价"
 BUSINESS_CATEGORIES = (REPAIR_CATEGORY, QUOTATION_CATEGORY)
 
+_DATE_TOKEN_PATTERN = r"\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?"
+_DATE_ONLY_LINE_RE = re.compile(
+    rf"^[ \t]*(?P<date>{_DATE_TOKEN_PATTERN})[ \t]*$",
+    re.MULTILINE,
+)
+_TRAILING_INLINE_DATE_RE = re.compile(
+    rf"(?:^|[ \t,;，；|])(?P<date>{_DATE_TOKEN_PATTERN})[ \t]*$"
+)
+
 _QUOTE_MARKERS = (
     "报价",
     "報價",
@@ -55,8 +64,10 @@ class SiteResolution:
 
 @dataclass(frozen=True)
 class SiteSegment:
+    source_segment_id: str
     site_name: str
     text: str
+    explicit_date_text: str = ""
 
 
 class ConfiguredSitePolicy:
@@ -143,15 +154,33 @@ class ConfiguredSitePolicy:
         mentions = self.mentions(source)
         if not mentions:
             return []
-        prefix = source[: mentions[0].start].strip()
+        segment_starts: list[int] = []
+        explicit_dates: list[str] = []
+        for index, mention in enumerate(mentions):
+            gap_start = mentions[index - 1].end if index else 0
+            gap = source[gap_start:mention.start]
+            date_match = _trailing_date_heading(gap)
+            explicit_dates.append(date_match.group("date") if date_match else "")
+            if date_match:
+                segment_starts.append(gap_start + date_match.start())
+            elif index == 0:
+                segment_starts.append(_line_start(source, mention.start))
+            else:
+                segment_starts.append(mention.start)
+
         segments: list[SiteSegment] = []
         for index, mention in enumerate(mentions):
-            end = mentions[index + 1].start if index + 1 < len(mentions) else len(source)
-            chunk = source[mention.start:end].strip(" \t\r\n,;，；")
-            if index == 0 and prefix:
-                chunk = f"{prefix}\n{chunk}".strip()
+            end = segment_starts[index + 1] if index + 1 < len(mentions) else len(source)
+            chunk = source[segment_starts[index]:end].strip(" \t\r\n,;，；")
             if chunk:
-                segments.append(SiteSegment(site_name=mention.site_name, text=chunk))
+                segments.append(
+                    SiteSegment(
+                        source_segment_id=f"site_segment_{index + 1}",
+                        site_name=mention.site_name,
+                        text=chunk,
+                        explicit_date_text=explicit_dates[index],
+                    )
+                )
         return segments
 
 
@@ -178,6 +207,19 @@ def business_categories(analysis: dict[str, object], source_text: str = "") -> l
 
 def _compact(value: object) -> str:
     return " ".join(str(value or "").split()).strip()
+
+
+def _trailing_date_heading(value: str) -> re.Match[str] | None:
+    matches = list(_DATE_ONLY_LINE_RE.finditer(value))
+    if matches:
+        match = matches[-1]
+        if not value[match.end():].strip():
+            return match
+    return _TRAILING_INLINE_DATE_RE.search(value)
+
+
+def _line_start(value: str, position: int) -> int:
+    return value.rfind("\n", 0, position) + 1
 
 
 def _is_ascii_variant(value: str) -> bool:

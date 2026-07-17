@@ -18,6 +18,18 @@ def safe_part(value: str | None, fallback: str) -> str:
     return cleaned[:80] or fallback
 
 
+def by_site_year_dir(root: Path, *, site: str, year: str) -> Path:
+    return root / "by_site" / safe_part(site, "unknown_site") / safe_part(year, "unknown_year")
+
+
+def by_site_date_dir(root: Path, *, site: str, work_date: str) -> Path:
+    date_part = safe_part(work_date, "unknown_date")
+    year = date_part[:4] if len(date_part) >= 4 and date_part[:4].isdigit() else "unknown_year"
+    month = date_part[5:7] if len(date_part) >= 7 and date_part[5:7].isdigit() else "unknown_month"
+    day = date_part[8:10] if len(date_part) >= 10 and date_part[8:10].isdigit() else "unknown_day"
+    return by_site_year_dir(root, site=site, year=year) / month / day
+
+
 @dataclass(frozen=True)
 class ArchivedFile:
     original_path: str
@@ -67,7 +79,7 @@ def archive_attachment(
     day = date_part[8:10] if len(date_part) >= 10 and date_part[8:10].isdigit() else "unknown_day"
     target_dir = archive_root / year / month / day / site_part
     target_dir.mkdir(parents=True, exist_ok=True)
-    site_index_dir = archive_root / "by_site" / site_part / year / month / day
+    site_index_dir = by_site_date_dir(archive_root, site=site_part, work_date=date_part)
     site_index_dir.mkdir(parents=True, exist_ok=True)
 
     base_name = f"{date_part}_{site_part}_{staff_part}_{work_part}_{type_part}_{digest[:10]}{ext.lower()}"
@@ -111,11 +123,7 @@ def mirror_attachment_for_category(
     category_part = safe_part(business_category, "")
     media_dir = "图片" if attachment_type == "image" else "PDF及其他附件"
     target_dir = (
-        output_root
-        / site_part
-        / date_part[:4]
-        / date_part[5:7]
-        / date_part[8:10]
+        by_site_date_dir(output_root, site=site_part, work_date=date_part)
         / category_part
         / media_dir
     )

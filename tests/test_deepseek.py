@@ -145,6 +145,15 @@ class DeepSeekNormalizeTests(unittest.TestCase):
             "2026-06-17",
         )
 
+    def test_split_work_items_does_not_inherit_date_across_site_headings(self) -> None:
+        items = split_work_item_text(
+            "15/7\n6PP\n例檢完成\nEast Apartments\n門禁已更換正常"
+        )
+
+        self.assertEqual(len(items), 2)
+        self.assertIn("15/7", items[0])
+        self.assertNotIn("15/7", items[1])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -106,8 +106,8 @@ config\customer_settings.json
 - `sites`：客户自定义地点词库，包含地点名称、别名/关键词、说明和启用状态。
 - `DATA_ROOT\年\月\日\地点\`：真正保存 photo record、维修报告 PDF、其他附件和地点维修与提醒表。
 - `DATA_ROOT\年\月\日\YYYY-MM-DD_维修与提醒总表.xlsx`：当天所有地点的综合检查表。
-- `DATA_ROOT\地点\年\月\日\维修\`、`DATA_ROOT\地点\年\月\日\报价\`：新增的地点优先分类 Excel 和附件镜像，无数据时不创建目录。
-- `DATA_ROOT\地点\年\地点_年_总表.xlsx`：该地点的年度维修、报价、附件和提醒汇总。
+- `DATA_ROOT\by_site\地点\年\月\日\维修\`、`DATA_ROOT\by_site\地点\年\月\日\报价\`：新增的地点优先分类 Excel 和附件镜像，无数据时不创建目录。
+- `DATA_ROOT\by_site\地点\年\地点_年_总表.xlsx`：该地点的年度维修、报价、附件和提醒汇总。
 
 ## 综合导出文件建议
 

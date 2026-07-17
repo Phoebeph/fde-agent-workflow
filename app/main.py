@@ -41,7 +41,13 @@ from app.services.automation import SCAN_CYCLE, STALE_CLAIM_SECONDS, build_due_a
 from app.services.completion import apply_schedule_completion, schedule_gap_analysis
 from app.services.customer_config import CustomerSettings, CustomerSettingsStore
 from app.services.diagnostics import build_location_coverage_report
-from app.services.deepseek import DeepSeekClient, DeepSeekError, rule_based_analysis, split_work_item_text
+from app.services.deepseek import (
+    DeepSeekClient,
+    DeepSeekError,
+    infer_work_date_from_text,
+    rule_based_analysis,
+    split_work_item_text,
+)
 from app.services.dispatch import discover_dispatch_schedules, followup_tracking_to_event
 from app.services.feishu import FeishuClient, FeishuError
 from app.services.fingerprint import message_fingerprint
@@ -49,7 +55,7 @@ from app.services.issues import issue_candidate_from_message, issue_schedule_mat
 from app.services.local_export import export_daily_workbook, export_site_classified_workbooks
 from app.services.reminder_text import generate_analysis_reminder_message, generate_reminder_message
 from app.services.rules import load_rules_from_xlsx
-from app.services.site_policy import ConfiguredSitePolicy, business_categories
+from app.services.site_policy import ConfiguredSitePolicy, SiteSegment, business_categories
 
 
 app = FastAPI(title="WhatsApp Repair AI Backend", version="0.1.0")
@@ -382,45 +388,44 @@ def _resolve_attachment_source_path(
     return source, "downloads_root_scan", candidate_count
 
 
-def _augment_analyses_with_configured_sites(
-    analyses: list[dict[str, object]],
+def _analyze_configured_site_segments(
+    *,
     message: dict[str, object],
     attachments: list[dict[str, object]],
     rules: list[dict[str, object]],
-) -> list[dict[str, object]]:
-    policy = ConfiguredSitePolicy.for_group(
-        _current_customer_settings(),
-        str(message.get("group_name") or ""),
-    )
-    augmented: list[dict[str, object]] = []
-    for analysis in analyses:
-        mapped = _apply_site_mapping(analysis, message)
-        if mapped.get("site"):
-            augmented.append(mapped)
-    existing_text = "\n".join(
-        str(item.get("site") or "") + " " + str(item.get("summary") or "")
-        for item in augmented
-    ).casefold()
-    for segment in policy.split(str(message.get("text") or "")):
-        chunk = segment.text
-        site_name = segment.site_name
-        if site_name.casefold() in existing_text and str(chunk[:24]).casefold() in existing_text:
-            continue
-        if site_name.casefold() in existing_text and _chunk_substance_is_covered(chunk, existing_text):
-            continue
+    deepseek: DeepSeekClient,
+    policy: ConfiguredSitePolicy,
+) -> tuple[list[dict[str, object]], list[SiteSegment]]:
+    archive_date = _export_date_from_sent_at(str(message.get("sent_at") or ""))
+    segments = policy.split(str(message.get("text") or ""))
+    analyses: list[dict[str, object]] = []
+    for segment in segments:
         item_message = dict(message)
-        item_message["text"] = chunk
-        analysis = rule_based_analysis(item_message, attachments, rules)
-        analysis["site"] = site_name
-        augmented.append(analysis)
-        existing_text += "\n" + site_name.casefold() + " " + str(analysis.get("summary") or "").casefold()
-    return augmented
+        item_message["text"] = segment.text
+        item_message["allowed_site_names"] = [segment.site_name]
+        item_message["archive_date"] = archive_date
+        item_message["source_segment_id"] = segment.source_segment_id
+        segment_analyses = deepseek.analyze_message_items(
+            message=item_message,
+            attachments=attachments,
+            rules=rules,
+        )
+        if not segment_analyses:
+            segment_analyses = [rule_based_analysis(item_message, attachments, rules)]
+        work_date = _work_date_for_site_segment(segment, archive_date)
+        for raw_analysis in segment_analyses:
+            analysis = dict(raw_analysis)
+            analysis["site"] = segment.site_name
+            analysis["work_date"] = work_date
+            analysis["source_segment_id"] = segment.source_segment_id
+            analyses.append(analysis)
+    return analyses, segments
 
 
-def _chunk_substance_is_covered(chunk: str, existing_text: str) -> bool:
-    tokens = [part.casefold() for part in str(chunk).replace("/", " ").split() if len(part) >= 3]
-    useful = [token for token in tokens if token not in {"the", "and", "正常", "完成"}]
-    return bool(useful) and any(token in existing_text for token in useful)
+def _work_date_for_site_segment(segment: SiteSegment, archive_date: str) -> str:
+    if not segment.explicit_date_text:
+        return archive_date
+    return infer_work_date_from_text(segment.explicit_date_text, archive_date)
 
 
 def _ensure_local_directories() -> None:
@@ -641,20 +646,22 @@ def _analyze_messages(messages: list[dict[str, object]], sync_feishu: bool) -> d
                 _current_customer_settings(),
                 str(merged_message.get("group_name") or ""),
             )
-            merged_message["allowed_site_names"] = [site.name for site in policy.sites]
-            analyses = deepseek.analyze_message_items(
+            analyses, site_segments = _analyze_configured_site_segments(
                 message=merged_message,
                 attachments=attachments,
                 rules=rules,
+                deepseek=deepseek,
+                policy=policy,
             )
-            analyses = _augment_analyses_with_configured_sites(analyses, merged_message, attachments, rules)
-            site_source_texts: dict[str, list[str]] = {}
-            for segment in policy.split(str(merged_message.get("text") or "")):
-                site_source_texts.setdefault(segment.site_name, []).append(segment.text)
+            segment_source_texts = {
+                segment.source_segment_id: segment.text
+                for segment in site_segments
+            }
             categorized_analyses: list[dict[str, object]] = []
             for raw_analysis in analyses:
-                source_text = "\n".join(
-                    site_source_texts.get(str(raw_analysis.get("site") or ""), [])
+                source_text = segment_source_texts.get(
+                    str(raw_analysis.get("source_segment_id") or ""),
+                    "",
                 )
                 for category in business_categories(raw_analysis, source_text):
                     categorized = dict(raw_analysis)
@@ -686,6 +693,7 @@ def _analyze_messages(messages: list[dict[str, object]], sync_feishu: bool) -> d
                     attachments=attachments,
                     schedules=schedules,
                 )
+                analysis["work_date"] = raw_analysis["work_date"]
                 analysis["whatsapp_text"] = str(merged_message.get("text") or "").strip()
                 feishu_record_id = None
                 if sync_feishu and settings.feishu_sync_available:
